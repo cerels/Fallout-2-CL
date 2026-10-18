@@ -238,7 +238,9 @@ def load_catalog() -> Catalog:
             if kept:
                 kept_groups.append((gname, kept))
         page.groups = kept_groups
-    cat.pages = [p for p in cat.pages if p.groups or p.name == "Launcher"]
+    # "Restoration Project" stays even with nothing installed yet - it's not a regular
+    # mod, it gets its own always-visible tab (see gui/rpu_page.py).
+    cat.pages = [p for p in cat.pages if p.groups or p.name in ("Launcher", "Restoration Project")]
 
     # Mod config files without a schema get a generated tab.
     covered = {ci_path(rel).resolve() for rel in [*cat.files.values(), *cat.not_settings]}

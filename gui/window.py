@@ -14,6 +14,7 @@ from backend.schema import Catalog, Page
 from .launcher_page import LauncherPage
 from .mods_page import ModsPage
 from .play_page import PlayPage
+from .rpu_page import RpuPage
 from .settings_page import SettingsPage
 from .store import Store
 from .style import AMBER
@@ -86,11 +87,16 @@ class Window(QMainWindow):
         self.play.double_clicked = self.launch
         self.pages: list[tuple[str, QWidget]] = [("Play", self.play)]
         launcher_page = None
+        rpu_page = None
         for page in catalog.pages:
             if page.name == "Launcher":
                 launcher_page = page
                 continue
+            if page.name == "Restoration Project":
+                rpu_page = page
+                continue
             self.pages.append((page.name, SettingsPage(page.name, page.groups, page.intro, store, catalog)))
+        self.pages.append(("Restoration Project", RpuPage(rpu_page or Page("Restoration Project"), store, catalog)))
         self.mods = ModsPage(store, mod_catalog)
         store.extras.append(self.mods)
         self.pages.append(("Mods", self.mods))
