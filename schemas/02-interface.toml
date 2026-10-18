@@ -1,0 +1,172 @@
+page = "Interface"
+
+[[group]]
+name = "Interface bar"
+file = "cfg"
+
+[[group.setting]]
+section = "ui"
+key = "iface_bar_width"
+label = "Interface bar width"
+type = "choice"
+default = "800"
+options = [["640", "Original (640 px)"], ["800", "Wide (800 px, hi-res patch art)"]]
+
+[[group.setting]]
+section = "ui"
+key = "iface_bar_side_art"
+label = "Side art next to the bar"
+type = "choice"
+default = "2"
+options = [["0", "None"], ["1", "Metal"], ["2", "Leather"], ["3", "Alternative metal 1"], ["4", "Alternative metal 2"], ["5", "Alternative metal 3"], ["6", "Alternative metal 4"], ["7", "Alternative leather"], ["8", "Brown metal"]]
+
+[[group.setting]]
+section = "ui"
+key = "iface_bar_sides_ori"
+label = "Side art direction"
+type = "choice"
+default = "0"
+options = [["0", "From the bar out to the screen edges"], ["1", "From the screen edges in to the bar"]]
+
+[[group.setting]]
+section = "ui"
+key = "iface_bar_mode"
+label = "Map behind the bar"
+type = "choice"
+default = "0"
+options = [["0", "Map stops above the bar"], ["1", "Map extends under the bar"]]
+
+[[group.setting]]
+section = "ui"
+key = "extend_ap_bar"
+label = "Show up to 16 action points"
+type = "bool"
+default = "0"
+help = "The vanilla bar only shows 10."
+
+[[group.setting]]
+section = "ui"
+key = "alternate_ammo_meter"
+label = "Ammo meter"
+type = "choice"
+default = "0"
+options = [["0", "Original"], ["1", "Segmented by burst"], ["2", "Segmented by burst and single shots"]]
+
+[[group.setting]]
+section = "ui"
+key = "in_game_menu_help"
+label = "Help entry in the in-game menu"
+type = "bool"
+default = "1"
+
+[[group]]
+name = "Inventory & trading"
+file = "cfg"
+
+[[group.setting]]
+section = "ui"
+key = "inventory_columns"
+label = "Inventory columns"
+type = "choice"
+default = "1"
+options = [["1", "1 (original)"], ["2", "2 (also lets you manage companion gear when looting)"]]
+
+[[group.setting]]
+section = "ui"
+key = "expand_barter_window"
+label = "Bigger barter window"
+type = "bool"
+default = "0"
+help = "Adds a 4th item row per side."
+
+[[group.setting]]
+section = "ui"
+key = "loot_weight_indicator"
+label = "Weight indicator"
+type = "choice"
+default = "1"
+options = [["0", "Off"], ["1", "Simple"], ["2", "Detailed (needs 2 columns)"], ["3", "Container size as XX/YY"]]
+
+[[group.setting]]
+section = "ui"
+key = "loot_container_size_indicator_threshold"
+label = "Show container fullness from"
+type = "int"
+default = "50"
+help = "0 = always show, 100 = only when full."
+min = 0
+max = 100
+suffix = " %"
+slider = true
+enabled_if = { setting = "cfg:ui:loot_weight_indicator", not = ["0"] }
+
+[[group.setting]]
+section = "ui"
+key = "display_bonus_damage"
+label = "Show bonus damage from perks"
+type = "bool"
+default = "0"
+
+[[group]]
+name = "Dialogue & info"
+file = "cfg"
+
+[[group.setting]]
+section = "ui"
+key = "numbers_in_dialogue"
+label = "Number the dialogue options"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+section = "ui"
+key = "dialog_border"
+label = "Hi-res dialogue border"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "ui"
+key = "display_karma_changes"
+label = "Announce karma changes"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+section = "ui"
+key = "party_member_extra_info"
+label = "Extra companion info in combat control"
+type = "bool"
+default = "0"
+help = "Level, armor class and addictions."
+
+[[group.setting]]
+section = "ui"
+key = "perks_progress_bar"
+label = "Progress bar for perk ranks"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+section = "preferences"
+key = "subtitles"
+label = "Subtitles"
+type = "bool"
+default = "0"
+
+[[group]]
+name = "Animation speed"
+file = "cfg"
+
+[[group.setting]]
+section = "ui"
+key = "anim_speed"
+label = "Interface animation speed"
+type = "float"
+default = "1.000000"
+help = "Screen fades, dialogue windows, counters. Does not affect gameplay."
+min = 0.25
+max = 5.0
+step = 0.25
+suffix = "×"
+slider = true

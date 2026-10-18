@@ -1,0 +1,183 @@
+page = "Display"
+
+[[group]]
+name = "Screen"
+file = "cfg"
+
+[[group.setting]]
+section = "screen"
+key = "resolution_x|resolution_y"
+label = "Resolution"
+type = "resolution"
+default = "640x480"
+help = "Size of the game window or screen in physical pixels."
+
+[[group.setting]]
+section = "screen"
+key = "windowed"
+label = "Display mode"
+type = "choice"
+default = "0"
+help = "Borderless window usually gives the smoothest result."
+options = [["0", "Fullscreen"], ["1", "Windowed"], ["2", "Borderless window"]]
+
+[[group.setting]]
+section = "screen"
+key = "scale"
+label = "Pixel scale"
+type = "choice"
+default = "1"
+help = "Draws the game at a lower resolution and enlarges it. Higher = bigger UI, less map on screen."
+options = [["1", "1× (tiny UI, most map visible)"], ["2", "2×"], ["3", "3×"], ["4", "4×"]]
+hint = "scale"
+
+[[group.setting]]
+section = "screen"
+key = "mouse_lock"
+label = "Keep mouse inside the game window"
+type = "bool"
+default = "0"
+help = "Needed for edge scrolling in windowed or borderless mode, especially with more than one monitor."
+
+[[group]]
+name = "Startup, menus & movies"
+file = "cfg"
+
+[[group.setting]]
+section = "ui"
+key = "skip_opening_movies"
+label = "Opening movies"
+type = "choice"
+default = "0"
+options = [["0", "Play all"], ["1", "Skip movies"], ["2", "Skip movies and splash screen"]]
+
+[[group.setting]]
+section = "ui"
+key = "main_menu_scale_mode"
+label = "Main menu scaling"
+type = "choice"
+default = "1"
+options = [["0", "Native size"], ["1", "Scale background"], ["2", "Scale background, buttons and text"]]
+
+[[group.setting]]
+section = "ui"
+key = "main_menu_overlay_subscreens"
+label = "Show main menu behind New/Load/Options screens"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+section = "ui"
+key = "splash_screen_size"
+label = "Splash screen"
+type = "choice"
+default = "1"
+options = [["0", "Native size"], ["1", "Fit to screen"], ["2", "Fill screen"]]
+
+[[group.setting]]
+section = "ui"
+key = "movie_aspect_fit"
+label = "Scale movies to fit the screen"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "ui"
+key = "death_screen_size"
+label = "Death screen"
+type = "choice"
+default = "1"
+options = [["0", "Native size"], ["1", "Fit to screen"]]
+
+[[group.setting]]
+section = "ui"
+key = "end_slide_size"
+label = "Ending slides"
+type = "choice"
+default = "1"
+options = [["0", "Native size"], ["1", "Fit to screen"]]
+
+[[group]]
+name = "Map view"
+file = "cfg"
+
+[[group.setting]]
+section = "ui"
+key = "enable_high_resolution_stencil"
+label = "Hide areas outside the map"
+type = "bool"
+default = "1"
+help = "Blacks out what lies beyond the map's edges at high resolutions."
+
+[[group.setting]]
+section = "ui"
+key = "edg_support"
+label = "Use map edge files (EDG)"
+type = "bool"
+default = "1"
+help = "Hi-res patch edge data that controls scroll limits per map."
+
+[[group.setting]]
+section = "ui"
+key = "ignore_scroll_limit"
+label = "Free scrolling away from the player"
+type = "bool"
+default = "0"
+help = "Removes the limit on how far the view can scroll from your character."
+
+[[group.setting]]
+section = "ui"
+key = "ignore_map_edges"
+label = "Ignore map edges"
+type = "bool"
+default = "0"
+
+[[group]]
+name = "Visuals & performance"
+file = "cfg"
+
+[[group.setting]]
+section = "preferences"
+key = "brightness"
+label = "Brightness"
+type = "float"
+default = "1.000000"
+min = 1.0
+max = 1.18
+step = 0.01
+slider = true
+
+[[group.setting]]
+section = "system"
+key = "color_cycling"
+label = "Animated palette effects"
+type = "bool"
+default = "1"
+help = "Flickering fires, glowing monitors, water and so on."
+
+[[group.setting]]
+section = "debug"
+key = "show_fps"
+label = "Show FPS counter"
+type = "bool"
+default = "0"
+help = "Shown in the top-left corner during gameplay and on the world map."
+
+[[group.setting]]
+section = "system"
+key = "art_cache_size"
+label = "Art cache size"
+type = "int"
+default = "32"
+help = "Memory for sprites. 256 is plenty."
+min = 32
+max = 512
+suffix = " MB"
+
+[[group.setting]]
+section = "system"
+key = "screenshots_format"
+label = "Screenshot format"
+type = "choice"
+default = "png"
+options = [["png", "PNG"], ["bmp", "BMP"]]

@@ -1,0 +1,37 @@
+page = "Companions & Highlights"
+
+[[group]]
+name = "Highlighting"
+file = "cfg"
+
+[[group.setting]]
+section = "preferences"
+key = "item_highlight"
+label = "Highlight items under the cursor"
+type = "bool"
+default = "1"
+
+[[group]]
+name = "Companions"
+file = "cfg"
+
+[[group.setting]]
+section = "qol"
+key = "party_trade_from_menu"
+label = "Open companion inventory from the action menu"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "qol"
+key = "party_loot_and_barter"
+label = "Use companion inventories when looting"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+section = "qol"
+key = "fast_ammo_load"
+label = "Load ammo without quantity prompts"
+type = "bool"
+default = "1"

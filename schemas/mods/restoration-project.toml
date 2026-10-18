@@ -1,0 +1,87 @@
+# Restoration Project Updated (https://github.com/BGforgeNet/Fallout2_Restoration_Project).
+# RP includes the Unofficial Patch; its upu.ini options are in unofficial-patch.toml.
+page = "Restoration Project"
+title = "Restoration Project"
+# Shown next to the engine name in the launcher's sidebar when installed.
+headline = true
+
+# RP config files that hold data, not player settings.
+not_settings = ["mods/AmmoGlovz.ini", "mods/AmmoYAAM.ini", "mods/elevators.ini"]
+
+[files]
+rpu = "mods/rpu.ini"
+
+[[mod]]
+dat = "rpu.dat"
+description = "Restoration Project Updated — restored content and fixes (core)"
+
+[[mod]]
+dat = "rpu_enhanced_worldmap.dat"
+description = "Enhanced world map art"
+
+[[mod]]
+dat = "rpu_extended_flamer.dat"
+description = "Extended flamer animations"
+
+[[mod]]
+dat = "rpu_rifle_animations.dat"
+description = "New rifle animations"
+
+[[mod]]
+dat = "rpu_wakizashi_animations.dat"
+description = "New wakizashi animations"
+
+[[mod]]
+dat = "cassidy_head.dat"
+description = "Talking head for Cassidy"
+
+[[mod]]
+dat = "cassidy_voice_joey_bracken_hq.dat"
+description = "High-quality voice for Cassidy"
+
+[[mod]]
+dat = "rpu_improved_mysterious_stranger.dat"
+description = "Improved Mysterious Stranger perk"
+
+[[mod]]
+dat = "rpu_alternative_explosions.dat"
+description = "Alternative explosion art"
+
+[[group]]
+name = "Restoration Project options"
+file = "rpu"
+
+[[group.setting]]
+section = "main"
+key = "marcus_armor"
+label = "Mutant armor for Marcus"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "main"
+key = "dogmeat_armor"
+label = "Kevlar armor for Dogmeat"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "main"
+key = "smoking"
+label = "Smoking animation"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "main"
+key = "lenny_new_look"
+label = "New look for Lenny"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "main"
+key = "vault_boxer"
+label = "Unique vault boxer model in the ring"
+type = "bool"
+default = "1"

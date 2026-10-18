@@ -1,0 +1,116 @@
+page = "Audio"
+
+[[group]]
+name = "Volume"
+file = "cfg"
+
+[[group.setting]]
+section = "sound"
+key = "master_volume"
+label = "Master"
+type = "volume"
+default = "22281"
+
+[[group.setting]]
+section = "sound"
+key = "music_volume"
+label = "Music"
+type = "volume"
+default = "22281"
+
+[[group.setting]]
+section = "sound"
+key = "sndfx_volume"
+label = "Sound effects"
+type = "volume"
+default = "22281"
+
+[[group.setting]]
+section = "sound"
+key = "speech_volume"
+label = "Speech"
+type = "volume"
+default = "22281"
+
+[[group]]
+name = "Sound"
+file = "cfg"
+
+[[group.setting]]
+section = "sound"
+key = "music"
+label = "Music"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "sound"
+key = "sounds"
+label = "Sound effects"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "sound"
+key = "speech"
+label = "Speech"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "sound"
+key = "float_speech"
+label = "Voiced floating text (taunts, barks)"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "sound"
+key = "pipboy_speech"
+label = "Voiced holodisks"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "sound"
+key = "gapless_music"
+label = "Don't restart music between maps with the same track"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "sound"
+key = "sfx_channels"
+label = "Sound effect channels"
+type = "int"
+default = "4"
+min = 4
+max = 16
+slider = true
+
+[[group.setting]]
+section = "sound"
+key = "float_channels"
+label = "Floating speech channels"
+type = "int"
+default = "4"
+min = 1
+max = 8
+slider = true
+
+[[group.setting]]
+section = "sound"
+key = "script_channels"
+label = "Script sound channels"
+type = "int"
+default = "4"
+min = 1
+max = 16
+slider = true
+
+[[group.setting]]
+section = "preferences"
+key = "language_filter"
+label = "Language filter"
+type = "bool"
+default = "0"

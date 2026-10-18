@@ -1,0 +1,92 @@
+# sfall's mod settings file (mods/sfall-mods.ini), shipped with the Restoration Project.
+# Adds its options to the engine's Companions & Highlights page.
+page = "Companions & Highlights"
+
+[files]
+sfallmods = "mods/sfall-mods.ini"
+
+[[group]]
+name = "Highlighting"
+file = "sfallmods"
+section = "Highlighting"
+
+[[group.setting]]
+key = "Key"
+label = "Highlight key"
+type = "key"
+default = "42"
+help = "Hold to outline things around you."
+
+[[group.setting]]
+key = "Containers"
+label = "Also outline containers"
+type = "bool"
+default = "0"
+enabled_if = { setting = "sfallmods:Highlighting:Key", not = ["0"] }
+
+[[group.setting]]
+key = "Corpses"
+label = "Also outline lootable corpses"
+type = "bool"
+default = "0"
+enabled_if = { setting = "sfallmods:Highlighting:Key", not = ["0"] }
+
+[[group.setting]]
+key = "Critters"
+label = "Also outline critters"
+type = "bool"
+default = "0"
+enabled_if = { setting = "sfallmods:Highlighting:Key", not = ["0"] }
+
+[[group.setting]]
+key = "CheckLOS"
+label = "Only what your character can see"
+type = "bool"
+default = "1"
+help = "Turn off to see loot through walls."
+enabled_if = { setting = "sfallmods:Highlighting:Key", not = ["0"] }
+
+[[group.setting]]
+key = "OutlineColor"
+label = "Item outline color"
+type = "choice"
+default = "16"
+options = [["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "sfallmods:Highlighting:Key", not = ["0"] }
+
+[[group.setting]]
+key = "OutlineColorContainers"
+label = "Container outline color"
+type = "choice"
+default = "4"
+options = [["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "sfallmods:Highlighting:Containers", equals = ["1"] }
+
+[[group.setting]]
+key = "OutlineColorCorpses"
+label = "Corpse outline color"
+type = "choice"
+default = "4"
+options = [["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "sfallmods:Highlighting:Corpses", equals = ["1"] }
+
+[[group.setting]]
+key = "MotionScanner"
+label = "Motion Sensor requirement"
+type = "choice"
+default = "0"
+options = [["0", "Not needed"], ["1", "Needs a Motion Sensor"], ["2", "Needs a Motion Sensor, uses a charge"]]
+enabled_if = { setting = "sfallmods:Highlighting:Key", not = ["0"] }
+
+[[group]]
+name = "Companions"
+file = "sfallmods"
+
+[[group.setting]]
+section = "CombatControl"
+key = "Mode"
+label = "Control companions in combat"
+type = "choice"
+default = "0"
+note = "This is an sfall feature and may not work in Fallout 2 CE."
+options = [["0", "Off (AI controls them)"], ["2", "Control all party members"], ["3", "Pick their targets with the command cursor"]]

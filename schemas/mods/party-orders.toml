@@ -1,0 +1,86 @@
+# Party Orders: companion hotkeys (mods/party_orders.ini).
+page = "Companions & Highlights"
+
+[files]
+party = "mods/party_orders.ini"
+
+[[mod]]
+dat = "party_orders.dat"
+description = "Party Orders — companion hotkeys (loot, heal, regroup…)"
+
+[[group]]
+name = "Party Orders"
+file = "party"
+
+[[group.setting]]
+section = "SETTINGS"
+key = "PLootNearbyItems"
+label = "Looters also pick up items near corpses"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "SETTINGS"
+key = "LootingOrderKey"
+label = "Companions loot bodies"
+type = "key"
+default = "34"
+
+[[group.setting]]
+section = "SETTINGS"
+key = "PickUpKey"
+label = "Pick up nearby items"
+type = "key"
+default = "20"
+
+[[group.setting]]
+section = "SETTINGS"
+key = "SwitchKey"
+label = "Toggle auto-loot for yourself"
+type = "key"
+default = "11"
+help = "Makes the pick-up key loot bodies for you too."
+
+[[group.setting]]
+section = "SETTINGS"
+key = "HealingOrderKey"
+label = "Companions heal"
+type = "key"
+default = "33"
+
+[[group.setting]]
+section = "SETTINGS"
+key = "HolsterOrderKey"
+label = "Companions holster weapons"
+type = "key"
+default = "35"
+
+[[group.setting]]
+section = "SETTINGS"
+key = "RegroupOrderKey"
+label = "Regroup"
+type = "key"
+default = "19"
+
+[[group.setting]]
+section = "SETTINGS"
+key = "SpreadOrderKey"
+label = "Spread out"
+type = "key"
+default = "45"
+
+[[group.setting]]
+section = "SETTINGS"
+key = "AmmoTypeOrderKey"
+label = "Switch AP / JHP ammo"
+type = "key"
+default = "48+29"
+help = "Modifier combinations like Ctrl+B are allowed."
+combo_keys = true
+
+[[group.setting]]
+section = "BURST_CONTROL"
+key = "burst_key"
+label = "Burst control key"
+type = "key"
+default = "32"

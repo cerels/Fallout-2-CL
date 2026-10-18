@@ -1,0 +1,220 @@
+page = "Combat & Balance"
+
+[[group]]
+name = "Combat"
+file = "cfg"
+
+[[group.setting]]
+section = "preferences"
+key = "combat_speed"
+label = "Combat speed"
+type = "int"
+default = "0"
+help = "0 = normal, 50 = fastest."
+min = 0
+max = 50
+slider = true
+
+[[group.setting]]
+section = "preferences"
+key = "target_highlight"
+label = "Highlight targets"
+type = "choice"
+default = "2"
+options = [["0", "Off"], ["1", "On"], ["2", "Targeting only"]]
+
+[[group.setting]]
+section = "preferences"
+key = "combat_messages"
+label = "Combat messages"
+type = "choice"
+default = "1"
+options = [["0", "Verbose"], ["1", "Brief"]]
+
+[[group.setting]]
+section = "preferences"
+key = "combat_taunts"
+label = "Combat taunts"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "preferences"
+key = "combat_looks"
+label = "Combat looks"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+section = "combat_ai"
+key = "npcs_try_to_spend_extra_ap"
+label = "NPCs retry turns with at least"
+type = "int"
+default = "0"
+help = "0 = off. Smarter AI spends leftover action points."
+min = 0
+max = 20
+suffix = " AP left"
+
+[[group]]
+name = "Rules & fixes"
+file = "content"
+
+[[group.setting]]
+section = "combat"
+key = "damage_formula"
+label = "Damage formula"
+type = "choice"
+default = "0"
+note = "Changes balance. Leave on Original unless you know you want this."
+options = [["0", "Original"], ["1", "Glovz's damage fix"], ["2", "Glovz's fix + damage multiplier tweak"], ["5", "Yet Another Ammo Mod (YAAM)"]]
+
+[[group.setting]]
+section = "combat"
+key = "bonus_hth_damage_fix"
+label = "Fix Bonus HtH Damage perk"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "combat"
+key = "check_weapon_ammo_cost"
+label = "Require enough ammo before attacking"
+type = "bool"
+default = "1"
+help = "Fixes weapons that fire with too little ammo."
+
+[[group.setting]]
+section = "combat"
+key = "remove_critical_time_limits"
+label = "Allow criticals from day one"
+type = "bool"
+default = "0"
+help = "The original game blocks critical hits for the first few days."
+
+[[group.setting]]
+section = "combat"
+key = "science_on_critters"
+label = "Science & Repair targets"
+type = "choice"
+default = "0"
+options = [["0", "Original (brahmin and robots)"], ["1", "Also yourself"], ["2", "Any critter"]]
+
+[[group.setting]]
+section = "combat"
+key = "inventory_ap_cost"
+label = "AP cost to open inventory in combat"
+type = "int"
+default = "4"
+min = 0
+max = 10
+slider = true
+
+[[group.setting]]
+section = "combat"
+key = "quick_pockets_ap_cost_reduction"
+label = "Quick Pockets AP reduction per rank"
+type = "int"
+default = "2"
+min = 0
+max = 10
+slider = true
+
+[[group]]
+name = "Burst fire"
+file = "content"
+
+[[group.setting]]
+section = "combat"
+key = "burst_enabled"
+label = "Modified burst spread"
+type = "bool"
+default = "0"
+help = "Use the ratios below for how burst rounds spread."
+
+[[group.setting]]
+section = "combat"
+key = "burst_center_mult"
+label = "Center group share (multiplier)"
+type = "int"
+default = "1"
+min = 1
+max = 10
+enabled_if = { setting = "content:combat:burst_enabled", equals = ["1"] }
+
+[[group.setting]]
+section = "combat"
+key = "burst_center_div"
+label = "Center group share (divisor)"
+type = "int"
+default = "3"
+min = 1
+max = 10
+enabled_if = { setting = "content:combat:burst_enabled", equals = ["1"] }
+
+[[group.setting]]
+section = "combat"
+key = "burst_target_mult"
+label = "Direct hits share (multiplier)"
+type = "int"
+default = "1"
+min = 1
+max = 10
+enabled_if = { setting = "content:combat:burst_enabled", equals = ["1"] }
+
+[[group.setting]]
+section = "combat"
+key = "burst_target_div"
+label = "Direct hits share (divisor)"
+type = "int"
+default = "2"
+min = 1
+max = 10
+enabled_if = { setting = "content:combat:burst_enabled", equals = ["1"] }
+
+[[group]]
+name = "Explosives"
+file = "content"
+
+[[group.setting]]
+section = "explosions"
+key = "emit_light"
+label = "Explosions light up the area"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+section = "explosions"
+key = "dynamite_min"
+label = "Dynamite minimum damage"
+type = "int"
+default = "30"
+min = 0
+max = 9999
+
+[[group.setting]]
+section = "explosions"
+key = "dynamite_max"
+label = "Dynamite maximum damage"
+type = "int"
+default = "50"
+min = 0
+max = 9999
+
+[[group.setting]]
+section = "explosions"
+key = "plastic_explosive_min"
+label = "Plastic explosive minimum damage"
+type = "int"
+default = "40"
+min = 0
+max = 9999
+
+[[group.setting]]
+section = "explosions"
+key = "plastic_explosive_max"
+label = "Plastic explosive maximum damage"
+type = "int"
+default = "80"
+min = 0
+max = 9999

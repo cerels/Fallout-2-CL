@@ -1,0 +1,54 @@
+# Unofficial Patch Updated (https://github.com/BGforgeNet/Fallout2_Unofficial_Patch).
+# Also included in the Restoration Project, which ships the same mods/upu.ini.
+page = "Unofficial Patch"
+title = "Unofficial Patch"
+headline = true
+intro = "Bug-fix patch by BGforge. The Restoration Project includes it, so these options apply to RP too."
+
+[files]
+upu = "mods/upu.ini"
+
+[[mod]]
+dat = "upu.dat"
+description = "Unofficial Patch Updated — bug fixes for the original game"
+
+[[group]]
+name = "Options"
+file = "upu"
+
+[[group.setting]]
+section = "main"
+key = "wipe_inventory"
+label = "Merchants restock fresh inventory"
+type = "bool"
+default = "0"
+help = "Otherwise merchants keep everything you ever sold them. Quest items are always kept."
+
+[[group.setting]]
+section = "ncr"
+key = "repeatable_brahmin_drive"
+label = "Repeatable NCR → Redding brahmin drive"
+type = "bool"
+default = "1"
+
+[[group]]
+name = "Not working in Fallout 2 CE"
+file = "upu"
+
+[[group.setting]]
+section = "main"
+key = "goris_derobing_speed"
+label = "Goris de-robing speed"
+type = "int"
+default = "16"
+note = "Its script uses an sfall command that CE doesn't have, so this has no effect."
+min = 0
+max = 100
+
+[[group.setting]]
+section = "main"
+key = "critters_walk_faster"
+label = "Slow critters walk faster"
+type = "bool"
+default = "1"
+note = "Its script uses an sfall command that CE doesn't have, so this has no effect."

@@ -1,0 +1,50 @@
+# Mods the launcher can download and install with one click.
+#
+# Scope: only the "regular" mods fallout2-ce's own README lists as explicitly
+# supported (https://github.com/fallout2-ce/fallout2-ce) and that install as a
+# flat drop-in under mods/ — no total conversions (Restoration Project, Fallout
+# et Tu, Sonora, ...), those need their own installer and are out of scope here.
+#
+# `github = "owner/repo"` resolves to that repo's latest release at runtime and
+# picks the first asset matching `asset` (an fnmatch pattern, default "*.zip").
+# `raw = "<url>"` instead fetches that single file directly, no release lookup.
+# Either way the downloaded zip's "mods/" contents are copied into mods/ as-is
+# (everything else in the archive, e.g. a Windows ddraw.dll, is ignored).
+#
+# `dat` lists the file(s) in mods/ that mean this entry is already installed.
+# `ini` is its settings file, if any — removed together with `dat` on Delete.
+
+[[entry]]
+id = "npc-armor"
+name = "NPC Armor"
+description = "Armor changes are visible on NPC sprites, not just the player's."
+homepage = "https://github.com/BGforgeNet/Fallout2_NPC_Armor"
+github = "BGforgeNet/Fallout2_NPC_Armor"
+dat = ["npc_armor.dat"]
+ini = "npcarmor.ini"
+
+[[entry]]
+id = "party-orders"
+name = "Party Orders"
+description = "Hotkeys to command companions: follow/wait, combat behavior, auto-loot."
+homepage = "https://github.com/BGforgeNet/Fallout2_Party_Orders"
+github = "BGforgeNet/Fallout2_Party_Orders"
+dat = ["party_orders.dat"]
+ini = "party_orders.ini"
+
+[[entry]]
+id = "fo2tweaks"
+name = "FO2Tweaks"
+description = "Collection of convenience tweaks, quality-of-life changes and optional cheats."
+homepage = "https://github.com/BGforgeNet/FO2tweaks"
+github = "BGforgeNet/FO2tweaks"
+dat = ["fo2tweaks.dat"]
+ini = "fo2tweaks.ini"
+
+[[entry]]
+id = "f2-res"
+name = "High Resolution Patch (f2_res.dat)"
+description = "Graphics assets CE needs for the expanded interface bar and barter window."
+homepage = "https://github.com/fallout2-ce/fallout2-ce"
+raw = "https://github.com/fallout2-ce/fallout2-ce/raw/refs/heads/main/files/f2_res.dat"
+dat = ["f2_res.dat"]

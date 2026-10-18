@@ -1,0 +1,161 @@
+page = "Gameplay"
+
+[[group]]
+name = "Difficulty"
+file = "cfg"
+
+[[group.setting]]
+section = "preferences"
+key = "game_difficulty"
+label = "Game difficulty"
+type = "choice"
+default = "1"
+help = "Affects skill checks."
+options = [["0", "Easy"], ["1", "Normal"], ["2", "Hard"]]
+
+[[group.setting]]
+section = "preferences"
+key = "combat_difficulty"
+label = "Combat difficulty"
+type = "choice"
+default = "1"
+options = [["0", "Wimpy"], ["1", "Normal"], ["2", "Rough"]]
+
+[[group.setting]]
+section = "preferences"
+key = "violence_level"
+label = "Violence"
+type = "choice"
+default = "3"
+options = [["0", "None"], ["1", "Minimal"], ["2", "Normal"], ["3", "Maximum blood"]]
+
+[[group]]
+name = "Movement & doors"
+file = "cfg"
+
+[[group.setting]]
+section = "preferences"
+key = "running"
+label = "Movement"
+type = "choice"
+default = "0"
+options = [["0", "Walk (hold Shift to run)"], ["1", "Always run"]]
+
+[[group.setting]]
+section = "preferences"
+key = "player_speedup"
+label = "Faster player movement"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+section = "qol"
+key = "auto_open_doors"
+label = "Open simple doors automatically"
+type = "bool"
+default = "0"
+help = "Walking into an unlocked door that has no script opens it. Doors work normally in combat."
+
+[[group.setting]]
+section = "qol"
+key = "walk_when_sneaking"
+label = "Walk instead of breaking sneak"
+type = "bool"
+default = "0"
+help = "When you try to run while sneaking without Silent Running."
+
+[[group.setting]]
+section = "qol"
+key = "use_walk_distance"
+label = "Walk (instead of run) when the target is within"
+type = "int"
+default = "3"
+help = "0 = always run to objects."
+min = 0
+max = 100
+suffix = " tiles"
+
+[[group.setting]]
+section = "system"
+key = "interrupt_walk"
+label = "Clicking interrupts walking"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "preferences"
+key = "running_burning_guy"
+label = "Burning critters run around"
+type = "bool"
+default = "1"
+
+[[group]]
+name = "Saving & leveling"
+file = "cfg"
+
+[[group.setting]]
+section = "ui"
+key = "auto_quick_save"
+label = "Quick save (F6) rotates through"
+type = "int"
+default = "0"
+help = "0 = off (F6 asks for a slot). Each page holds 10 slots."
+min = 0
+max = 10
+suffix = " pages"
+slider = true
+
+[[group.setting]]
+section = "gameplay"
+key = "perk_carryover"
+label = "Unspent perks"
+type = "choice"
+default = "1"
+options = [["0", "Lost on level-up (original)"], ["1", "Kept; pick from the earlier level's list first"], ["2", "Kept; can pick from the current level's list"]]
+
+[[group]]
+name = "World map"
+file = "content"
+
+[[group.setting]]
+section = "worldmap"
+key = "trail_markers"
+label = "Travel trail markers"
+type = "choice"
+default = "0"
+help = "Dotted trail behind your party marker."
+options = [["0", "Off"], ["1", "On"], ["2", "Only while sneaking"]]
+
+[[group.setting]]
+section = "worldmap"
+key = "terrain_info"
+label = "Show terrain name on hover"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+section = "worldmap"
+key = "town_map_hotkeys_fix"
+label = "Block number keys for unvisited areas"
+type = "bool"
+default = "1"
+help = "Prevents entering unvisited town areas with number keys (bug fix)."
+
+[[group.setting]]
+section = "worldmap"
+key = "travel_delay"
+label = "Travel update delay"
+type = "int"
+default = "0"
+help = "Time between world map travel steps. 66 matches the original speed. 0 = every frame (travel speed would depend on frame rate)."
+min = 0
+max = 150
+suffix = " ms"
+
+[[group.setting]]
+section = "worldmap"
+key = "disable_horrigan"
+label = "Skip the Frank Horrigan encounter"
+type = "bool"
+default = "0"
+note = "Story spoiler: removes a scripted late-game encounter."

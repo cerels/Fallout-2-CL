@@ -1,0 +1,21 @@
+page = "Launcher"
+
+[[group]]
+name = "Starting the game"
+file = "launcher"
+
+[[group.setting]]
+section = "launcher"
+key = "show_launcher"
+label = "Show this launcher when starting the game"
+type = "bool"
+default = "1"
+help = "When off, starting from Steam goes straight into the game. Use the \"Fallout 2 Launcher\" entry in your app menu to get back here."
+
+[[group.setting]]
+section = "launcher"
+key = "on_start"
+label = "When skipping the launcher"
+type = "choice"
+default = "continue"
+options = [["continue", "Continue the latest save"], ["menu", "Open the main menu"]]

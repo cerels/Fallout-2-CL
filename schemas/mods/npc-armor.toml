@@ -1,0 +1,7 @@
+# NPC Armor: companions' appearance follows the armor they wear.
+# Its config file (mods/npcarmor.ini) is sprite data, not player settings.
+not_settings = ["mods/npcarmor.ini"]
+
+[[mod]]
+dat = "npc_armor.dat"
+description = "NPC Armor — companions' look follows the armor they wear"

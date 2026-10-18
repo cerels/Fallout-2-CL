@@ -1,0 +1,412 @@
+# Schema for FO2Tweaks (https://github.com/BGforgeNet/fo2tweaks), written against v14.7.
+# Defaults are the values FO2Tweaks ships with. Keys not listed here (item PID lists,
+# per-NPC tables) are left for advanced users to edit in mods/fo2tweaks.ini directly.
+page = "FO2Tweaks"
+intro = "Convenience tweaks, fixes and optional cheats by BGforge. Changes apply the next time you load a save."
+
+[files]
+fo2tweaks = "mods/fo2tweaks.ini"
+
+[[mod]]
+dat = "fo2tweaks.dat"
+description = "FO2Tweaks — convenience tweaks, fixes and optional cheats"
+
+[[group]]
+name = "Combat"
+file = "fo2tweaks"
+section = "main"
+
+[[group.setting]]
+key = "hp_over_head"
+label = "Show HP over heads in combat"
+type = "bool"
+default = "0"
+help = "Floating HP numbers over you, your party and nearby enemies. FO2Tweaks notes there is some delay."
+
+[[group.setting]]
+section = "hp_over_head"
+key = "key"
+label = "HP over heads key"
+type = "text"
+default = "V"
+help = "A letter key: HP is shown once per tap. Leave empty to show it all the time."
+enabled_if = { setting = "fo2tweaks:main:hp_over_head", equals = ["1"] }
+
+[[group.setting]]
+section = "hp_over_head"
+key = "only_party"
+label = "HP over heads for party members only"
+type = "bool"
+default = "0"
+enabled_if = { setting = "fo2tweaks:main:hp_over_head", equals = ["1"] }
+
+[[group.setting]]
+key = "ap_rollover"
+label = "Carry over unused action points"
+type = "int"
+default = "2"
+min = 0
+max = 10
+slider = true
+suffix = " AP"
+help = "Up to this many unused AP carry over to your next turn, replacing the armor class bonus for unused AP. 0 = original rules."
+note = "Changes game balance."
+
+[[group.setting]]
+key = "damage_mod"
+label = "AP/JHP ammo damage rework"
+type = "bool"
+default = "1"
+help = "Fixes the original's broken armor-piercing and hollow-point ammo. Needs the original damage formula (Combat & Balance → Damage formula)."
+note = "Changes game balance."
+
+[[group.setting]]
+section = "damage_mod"
+key = "damage_difficulty"
+label = "Damage multiplier"
+type = "choice"
+default = "0"
+options = [["0", "Tied to combat difficulty (original)"], ["1", "Wimpy (75%)"], ["2", "Normal (100%)"], ["3", "Rough (125%)"]]
+help = "Separates damage from the combat difficulty option, which then only affects enemy aim and AI."
+enabled_if = { setting = "fo2tweaks:main:damage_mod", equals = ["1"] }
+
+[[group.setting]]
+section = "damage_mod"
+key = "party_scale_damage"
+label = "Difficulty scales your party's damage too"
+type = "bool"
+default = "0"
+help = "Normally only enemy damage changes with difficulty."
+enabled_if = { setting = "fo2tweaks:main:damage_mod", equals = ["1"] }
+
+[[group.setting]]
+key = "improved_grenades"
+label = "Improved grenades"
+type = "bool"
+default = "1"
+help = "Grenades ignore target AC and can be thrown at empty tiles."
+
+[[group.setting]]
+key = "molotov_fire"
+label = "Molotovs do fire damage"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+key = "no_scope_penalty"
+label = "No close-range penalty for scoped weapons"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+key = "max_knockback"
+label = "Maximum knockback"
+type = "int"
+default = "-1"
+min = -1
+max = 20
+suffix = " hexes"
+help = "-1 = unlimited (original), 0 = no knockback."
+
+[[group.setting]]
+key = "auto_reload"
+label = "Reload both weapons after combat"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+key = "ammobox"
+label = "Show current ammo type during combat"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+key = "auto_cursor"
+label = "Switch cursor automatically on mouseover in combat"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+key = "no_drop_items_on_death"
+label = "Keep loot on melted, exploded or burned enemies"
+type = "bool"
+default = "1"
+help = "Their remains can be looted normally instead of the inventory spilling on the ground."
+
+[[group]]
+name = "Party"
+file = "fo2tweaks"
+section = "main"
+
+[[group.setting]]
+key = "unlimited_party"
+label = "No Charisma limit on party size"
+type = "bool"
+default = "0"
+help = "Other joining conditions (karma, quests) still apply. Covers all original and Restoration Project companions."
+
+[[group.setting]]
+key = "party_level_match"
+label = "Companions level closer to your level"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+key = "modoc_brahmin"
+label = "Protect Modoc's brahmin from your companions"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+key = "run_speed"
+label = "Faster running"
+type = "bool"
+default = "0"
+help = "Helps slow companions keep up."
+note = "Needs an sfall file-system option that Fallout 2 CE may not support."
+
+[[group.setting]]
+section = "run_speed"
+key = "dude"
+label = "Faster running for you"
+type = "bool"
+default = "1"
+enabled_if = { setting = "fo2tweaks:main:run_speed", equals = ["1"] }
+
+[[group.setting]]
+section = "run_speed"
+key = "party"
+label = "Faster running for companions"
+type = "bool"
+default = "1"
+enabled_if = { setting = "fo2tweaks:main:run_speed", equals = ["1"] }
+
+[[group]]
+name = "Highlighting"
+file = "fo2tweaks"
+section = "highlighting"
+
+[[group.setting]]
+section = "main"
+key = "highlighting"
+label = "FO2Tweaks highlighting"
+type = "bool"
+default = "1"
+help = "Outlines locked doors and containers, traps, party members and exits, and skips empty containers."
+note = "Replaces the standard highlighting: set Companions & Highlights → Highlight key to None while this is on."
+
+[[group.setting]]
+key = "key"
+label = "Highlight key"
+type = "key"
+default = "42"
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "check_los"
+label = "Only what your character can see"
+type = "bool"
+default = "0"
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "skip_empty"
+label = "Skip empty containers and corpses"
+type = "bool"
+default = "1"
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "motion_scanner"
+label = "Motion Sensor requirement"
+type = "choice"
+default = "0"
+options = [["0", "Not needed"], ["1", "Needs a Motion Sensor"], ["2", "Needs a Motion Sensor, uses a charge"]]
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "color_items"
+label = "Items"
+type = "choice"
+default = "16"
+options = [["0", "Off"], ["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "color_containers"
+label = "Containers"
+type = "choice"
+default = "8"
+options = [["0", "Off"], ["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "color_locked_containers"
+label = "Locked containers"
+type = "choice"
+default = "2"
+options = [["0", "Off"], ["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "color_locked_doors"
+label = "Locked doors"
+type = "choice"
+default = "2"
+options = [["0", "Off"], ["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "color_traps"
+label = "Traps"
+type = "choice"
+default = "2"
+options = [["0", "Off"], ["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "color_critters"
+label = "Critters"
+type = "choice"
+default = "32"
+options = [["0", "Off"], ["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "color_corpses"
+label = "Corpses"
+type = "choice"
+default = "16"
+options = [["0", "Off"], ["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "color_party"
+label = "Party members"
+type = "choice"
+default = "8"
+options = [["0", "Off"], ["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "color_dude"
+label = "You"
+type = "choice"
+default = "0"
+options = [["0", "Off"], ["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group.setting]]
+key = "color_transitions"
+label = "Exits (manholes, wells…)"
+type = "choice"
+default = "64"
+options = [["0", "Off"], ["1", "Glowing red"], ["2", "Red"], ["4", "Grey"], ["8", "Glowing green"], ["16", "Bright yellow"], ["32", "Dark yellow"], ["64", "Purple"]]
+enabled_if = { setting = "fo2tweaks:main:highlighting", equals = ["1"] }
+
+[[group]]
+name = "Interface & hotkeys"
+file = "fo2tweaks"
+section = "main"
+
+[[group.setting]]
+key = "worldmap_key"
+label = "World map key"
+type = "text"
+default = "W"
+help = "A letter key. 0 disables it."
+
+[[group.setting]]
+key = "townmap_key"
+label = "Town map key"
+type = "text"
+default = "Y"
+help = "A letter key. 0 or T keeps the default T key."
+
+[[group.setting]]
+key = "keymap"
+label = "Remap save/load keys"
+type = "bool"
+default = "1"
+help = "F5 = quick save, F8 = quick load, F9 = load game, J = center on player. The keys they replace stop working."
+
+[[group.setting]]
+key = "autodoors"
+label = "FO2Tweaks auto-doors"
+type = "choice"
+default = "1"
+options = [["0", "Off"], ["1", "Open unlocked doors"], ["2", "Open, and close them again behind you"]]
+note = "Your Fallout 2 CE build has its own auto-doors (Gameplay → Open doors automatically). Use only one of the two."
+
+[[group.setting]]
+key = "min_light_level"
+label = "Minimum map brightness"
+type = "int"
+default = "0"
+min = 0
+max = 100
+slider = true
+suffix = " %"
+help = "Dark maps never get darker than this. FO2Tweaks recommends 49. 0 = off."
+
+[[group]]
+name = "Healing & leveling"
+file = "fo2tweaks"
+section = "main"
+
+[[group.setting]]
+key = "healing_revision"
+label = "Reworked healing"
+type = "bool"
+default = "1"
+
+[[group.setting]]
+section = "healing_revision"
+key = "living_anatomy_min_doctor"
+label = "Free Living Anatomy perk at Doctor skill"
+type = "int"
+default = "135"
+min = 0
+max = 301
+suffix = " %"
+help = "Over 300 disables the free perk."
+enabled_if = { setting = "fo2tweaks:main:healing_revision", equals = ["1"] }
+
+[[group.setting]]
+key = "gigolo_limit"
+label = "Partners needed for the Gigolo title"
+type = "int"
+default = "0"
+min = 0
+max = 20
+help = "0 = original rules."
+
+[[group]]
+name = "Cheats"
+file = "fo2tweaks"
+section = "main"
+
+[[group.setting]]
+key = "carry_weight"
+label = "Unlimited carry weight"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+key = "trunk_space"
+label = "Bottomless car trunk"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+key = "level5"
+label = "Level 5 after the Temple of Trials"
+type = "bool"
+default = "0"
+
+[[group.setting]]
+key = "speedup"
+label = "Overall game speedup"
+type = "bool"
+default = "0"
+note = "FO2Tweaks says to read its readme before enabling this."

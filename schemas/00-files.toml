@@ -1,0 +1,12 @@
+# Engine config files the core schemas refer to. Mods declare their own files in
+# schemas/mods/*.toml or mods/*.schema.toml. Paths are relative to the game folder
+# and resolved case-insensitively, like the engine does.
+[files]
+cfg = "fallout2.cfg"
+content = "data/config/game#patch.cfg"
+launcher = "launcher/launcher.ini"
+
+# Values for keys missing from a file come from this file inside a DAT archive.
+[defaults_from.content]
+dat = "ce.dat"
+path = 'config\game.cfg'
