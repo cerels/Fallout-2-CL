@@ -1,9 +1,24 @@
 # Fallout 2 CE Launcher
 
-A settings launcher for [Fallout 2 Community Edition](https://github.com/fallout2-ce/fallout2-ce).
-Every option that normally means editing `fallout2.cfg`, `data/config/game#patch.cfg` or a
-mod's `.ini` gets a proper UI, plus a save picker and a mod load-order editor.
+A settings launcher for [Fallout 2 Community Edition](https://github.com/fallout2-ce/fallout2-ce)
+and the total conversions built on the same engine family. Every option that normally means
+editing `fallout2.cfg`, `data/config/game#patch.cfg` or a mod's `.ini` gets a proper UI, plus a
+save picker and a mod load-order editor.
 
+- **Campaigns**: Vanilla/CE, [Fallout et Tu](https://github.com/rotators/Fo1in2),
+  [Fallout: Sonora](https://github.com/cambragol/Fallout-Sonora-English) and
+  [Fallout 2: Nevada](https://github.com/HogLord69/fallout-english-localization) (English) are
+  one-click installs each from the **Campaigns** page; [RPU](https://github.com/BGforgeNet/Fallout2_Restoration_Project)
+  (Restoration Project) installs the same way from its own tab inside the CE campaign's menu,
+  since it's a content overlay for CE rather than a separate game - see `GLOSSARY.md`. The sidebar
+  logo is a quick-switcher between whichever campaigns are installed; switching reloads this
+  launcher's settings, mods and saves for that campaign, each kept independent
+  (`docs/adr/0001-campaign-root-is-a-subfolder.md`). The launcher remembers the last campaign you
+  played. Olympus 2207 isn't supported - see `docs/adr/0002-olympus-not-supported.md`.
+- **Steam integration**: besides the default Launch Options line (below), the Campaigns page
+  shows a second one for Et Tu, meant for pasting into *Fallout 1's* own Steam entry so pressing
+  Play there opens straight into Et Tu. Sonora and Nevada have no Steam app of their own, so they
+  get an "Add to Steam" button instead (a non-Steam game shortcut, forced into that campaign).
 - **Settings pages** with descriptions, the right control for each value (switches, dropdowns,
   sliders, key capture), a marker on anything changed from its default, one-click reset and search.
 - **Save picker** with thumbnails, character name, location and in-game date. Continue the latest
