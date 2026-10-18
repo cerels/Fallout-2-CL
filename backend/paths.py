@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 FROZEN = getattr(sys, "frozen", False)
@@ -53,6 +54,20 @@ def game_dir() -> Path:
 def set_campaign_root(root: Path) -> None:
     global _active_root
     _active_root = root
+
+
+@contextmanager
+def campaign_root_override(root: Path):
+    """Temporarily point game_dir() elsewhere - e.g. so an installer that's generic over
+    "the active campaign's root" (ce_install.install_ce) can be pointed at a campaign
+    other than the one currently active, such as fetching a native engine binary into a
+    freshly-installed total conversion's own root."""
+    previous = _active_root
+    set_campaign_root(root)
+    try:
+        yield
+    finally:
+        set_campaign_root(previous)
 
 
 def game_bin() -> Path:
