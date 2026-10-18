@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from .ini_file import IniFile
-from .paths import GAME_BIN, GAME_DIR, LAUNCHER_INI
+from .paths import LAUNCHER_INI, game_bin, game_dir
 from .saves import read_saves
 
 
@@ -25,5 +25,6 @@ def game_args(mode: str, slot: int | None = None) -> list[str]:
 
 
 def exec_game(args: list[str]) -> None:
-    os.chdir(GAME_DIR)
-    os.execv(str(GAME_BIN), [str(GAME_BIN), *args])
+    os.chdir(game_dir())
+    binary = str(game_bin())
+    os.execv(binary, [binary, *args])

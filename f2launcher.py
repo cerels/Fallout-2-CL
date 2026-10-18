@@ -6,9 +6,11 @@ A settings UI for every option that otherwise lives in config files
 and a mod load-order editor. "Play" saves pending changes and replaces this
 process with fallout2-ce, so Steam keeps tracking the game.
 
-Started by ../launch-ce.sh (the Steam launch option).
+Started by launcher/launch.sh (the Steam launch option).
   --ui      always show the launcher window
   --no-ui   skip the window and start the game right away
+  --campaign=<id>   force a campaign (see backend/campaigns.py), overriding
+                    "remember last campaign" for this one launch
   --check-schemas   validate the settings schemas and list the generated tabs
 """
 
@@ -22,6 +24,7 @@ from pathlib import Path
 # regardless of how this script is started or what the current directory is.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from backend.campaigns import activate, by_id, forced_campaign_id, load_last_campaign_id, save_last_campaign_id
 from backend.ini_file import IniFile
 from backend.launch import exec_game, game_args, launcher_prefs
 from backend.mod_catalog import load_mod_catalog
@@ -66,6 +69,14 @@ def main() -> None:
     if "--check-schemas" in sys.argv:
         sys.exit(check_schemas())
     prefs = launcher_prefs()
+
+    forced_id = forced_campaign_id(sys.argv)
+    campaign_id = forced_id or load_last_campaign_id(prefs)
+    campaign = by_id(campaign_id) or by_id("ce")
+    activate(campaign)
+    if forced_id is None:
+        save_last_campaign_id(prefs, campaign.id)
+
     show = (prefs.get("launcher", "show_launcher") or "1") != "0"
     if "--ui" in sys.argv:
         show = True

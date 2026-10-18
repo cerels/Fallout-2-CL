@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidg
 
 from backend.ce_install import install_ce, needs_ce_install
 from backend.mod_catalog import CatalogEntry
-from backend.paths import GAME_BIN
+from backend.paths import game_bin
 from backend.schema import Catalog, Page
 
 from .launcher_page import LauncherPage
@@ -183,11 +183,11 @@ class Window(QMainWindow):
     def launch(self):
         if self.store.dirty_count() and not self.save():
             return
-        if not GAME_BIN.is_file():
+        if not game_bin().is_file():
             if needs_ce_install():
                 self._offer_ce_install()
             else:
-                QMessageBox.critical(self, "Game not found", f"{GAME_BIN} is missing.")
+                QMessageBox.critical(self, "Game not found", f"{game_bin()} is missing.")
             return
         self.result = (self.play.mode, self.play.slot)
         self.close()

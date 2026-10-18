@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPush
 
 from backend.ce_install import load_ce_state, needs_ce_install
 from backend.launch_option import steam_launch_option
-from backend.paths import GAME_BIN, GAME_DIR, ci_path
+from backend.paths import ci_path, game_bin, game_dir
 from backend.schema import Catalog, Page
 
 from .settings_page import SettingsPage
@@ -28,7 +28,7 @@ class LauncherPage(SettingsPage):
                  ("game#patch.cfg", "data/config/game#patch.cfg")]
         for i, (label, rel) in enumerate(links):
             b = QPushButton(label)
-            path = ci_path(rel) if rel else GAME_DIR
+            path = ci_path(rel) if rel else game_dir()
             b.clicked.connect(lambda _=False, p=path: QDesktopServices.openUrl(QUrl.fromLocalFile(str(p))))
             if not path.exists():
                 b.setEnabled(False)
@@ -39,21 +39,22 @@ class LauncherPage(SettingsPage):
         frame2, inner2 = card("About this install")
         content = store.files.get("content")
         version = (content.get("main_menu", "version_string") if content else None) or "unknown"
-        if GAME_BIN.is_file():
-            engine = f"Fallout 2 Community Edition ({GAME_BIN.name})"
+        bin_path = game_bin()
+        if bin_path.is_file():
+            engine = f"Fallout 2 Community Edition ({bin_path.name})"
             published = load_ce_state().get("published_at")
             if published:
                 engine += f" · installed build from {published[:10]}"
         elif needs_ce_install():
             engine = "Not installed yet — press Play to download and install it"
         else:
-            engine = f"Not found ({GAME_BIN.name} is missing)"
+            engine = f"Not found ({bin_path.name} is missing)"
         mods = ", ".join(catalog.headlines) or "none with a schema"
         info = QLabel(
             f"<b>Engine:</b> {engine}<br>"
             f"<b>Headline mods:</b> {mods}<br>"
             f"<b>Version string:</b> {version}<br>"
-            f"<b>Folder:</b> {GAME_DIR}<br>"
+            f"<b>Folder:</b> {game_dir()}<br>"
             f"Every time the launcher saves, the previous config files are copied to backup/launcher/ first.")
         info.setWordWrap(True)
         info.setObjectName("muted")

@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject, Signal
 
 from backend.dat import dat_read, parse_ini_text
 from backend.ini_file import IniFile
-from backend.paths import BACKUP_DIR, ci_path
+from backend.paths import backup_dir, ci_path
 from backend.schema import Catalog, Setting
 
 
@@ -105,7 +105,7 @@ class Store(QObject):
             for fid in touched:
                 f = self.files[fid]
                 if f.exists and fid != "launcher":
-                    dest = BACKUP_DIR / backup_stamp / self.catalog.files[fid]
+                    dest = backup_dir() / backup_stamp / self.catalog.files[fid]
                     if not dest.exists():
                         dest.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(f.path, dest)

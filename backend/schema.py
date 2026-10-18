@@ -15,7 +15,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .paths import GAME_BIN, RESOURCE_DIR, ci_path, mod_installed
+from .paths import RESOURCE_DIR, ci_path, game_bin, mod_installed
 
 SETTING_TYPES = {"bool", "choice", "int", "float", "volume", "key", "resolution", "text"}
 
@@ -154,18 +154,20 @@ def _setting_from_toml(data: dict, group: dict, where: str, optional: bool) -> S
         hint=data.get("hint"), decimals=data.get("decimals", 2))
 
 
-_engine_binary: bytes | None = None
+_engine_binary_cache: dict[Path, bytes] = {}
 
 
 def engine_supports(name: str) -> bool:
-    """True if the installed fallout2-ce binary knows the setting `name`."""
-    global _engine_binary
-    if _engine_binary is None:
+    """True if the active campaign's engine binary knows the setting `name`."""
+    path = game_bin()
+    binary = _engine_binary_cache.get(path)
+    if binary is None:
         try:
-            _engine_binary = GAME_BIN.read_bytes()
+            binary = path.read_bytes()
         except OSError:
-            _engine_binary = b""
-    return b"\0" + name.encode() + b"\0" in _engine_binary
+            binary = b""
+        _engine_binary_cache[path] = binary
+    return b"\0" + name.encode() + b"\0" in binary
 
 
 def load_catalog() -> Catalog:

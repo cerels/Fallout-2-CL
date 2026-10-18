@@ -5,11 +5,17 @@ from __future__ import annotations
 
 import sys
 
-from .paths import FROZEN, GAME_DIR
+from .paths import FROZEN, LAUNCHER_DIR
 
 
-def steam_launch_option() -> tuple[str, bool]:
+def steam_launch_option(force_campaign: str | None = None) -> tuple[str, bool]:
     """Return (the Launch Options string to paste into Steam, whether it's verified).
+
+    The target is always where this launcher itself lives (LAUNCHER_DIR) - not the active
+    campaign's root, which can be a subfolder underneath it. That's what makes it possible
+    to paste a *different* Steam entry's launch options (e.g. Fallout 1's, to force Et Tu)
+    at the same launcher: `force_campaign` adds the flag that picks the campaign on
+    startup, overriding "remember last campaign" for that one launch.
 
     Linux and macOS both run Launch Options through a shell that treats "#" as a comment,
     so "<target> # %command%" drops Steam's own command entirely. cmd.exe (Windows) has
@@ -19,8 +25,9 @@ def steam_launch_option() -> tuple[str, bool]:
     A frozen (PyInstaller) build targets its own exe directly - no launcher/ subfolder,
     no launch.sh/launch.bat, since the exe already contains all of their logic itself.
     """
-    target = sys.executable if FROZEN else GAME_DIR / "launcher" / ("launch.bat" if sys.platform == "win32"
-                                                                    else "launch.sh")
+    target = sys.executable if FROZEN else LAUNCHER_DIR / "launcher" / ("launch.bat" if sys.platform == "win32"
+                                                                         else "launch.sh")
+    args = f" --campaign={force_campaign}" if force_campaign else ""
     if sys.platform == "win32":
-        return f'"{target}" %command%', False
-    return f'"{target}" # %command%', True
+        return f'"{target}"{args} %command%', False
+    return f'"{target}"{args} # %command%', True

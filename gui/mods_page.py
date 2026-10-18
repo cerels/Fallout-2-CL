@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QLabel, QListWidg
 
 from backend.mod_catalog import (CatalogEntry, check_for_update, delete_mod_files, install_catalog_entry,
                                  load_catalog_state, save_catalog_state)
-from backend.paths import BACKUP_DIR, ci_path, mod_installed
+from backend.paths import backup_dir, ci_path, mod_installed
 
 from .store import Store
 
@@ -317,7 +317,7 @@ class ModsPage(QWidget):
             return
         if self.path.is_file():
             stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-            dest = BACKUP_DIR / stamp / "mods" / "mods_order.txt"
+            dest = backup_dir() / stamp / "mods" / "mods_order.txt"
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(self.path, dest)
         lines = [name if enabled else f";{name}" for name, enabled in self._serialize()]

@@ -13,7 +13,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from .paths import GAME_BIN, GAME_DIR, ci_path
+from .paths import ci_path, game_bin, game_dir
 
 CE_REPO = "fallout2-ce/fallout2-ce"
 CE_RELEASE_TAG = "continious"
@@ -26,12 +26,12 @@ _LINUX_ASSET_BY_ARCH = {
 
 
 def _ce_state_path() -> Path:
-    return GAME_DIR / ".f2launcher-ce.json"
+    return game_dir() / ".f2launcher-ce.json"
 
 
 def load_ce_state() -> dict:
     """What the launcher last installed: the release's publish time and asset name, for
-    display. Not needed for detection, which just checks GAME_BIN directly."""
+    display. Not needed for detection, which just checks game_bin() directly."""
     import json
     try:
         return json.loads(_ce_state_path().read_text("utf-8"))
@@ -56,7 +56,7 @@ def needs_ce_install() -> bool:
     for them yet), and an unrelated/empty folder is left to the normal "not found" error."""
     if sys.platform != "linux":
         return False
-    return looks_like_vanilla_install() and not GAME_BIN.is_file()
+    return looks_like_vanilla_install() and not game_bin().is_file()
 
 
 def _linux_asset_name() -> str:
@@ -84,8 +84,9 @@ def resolve_ce_download() -> tuple[str, str, str]:
 
 
 def install_ce() -> None:
-    """Download and place the fallout2-ce binary + ce.dat in GAME_DIR. Raises on any
-    failure. Never touches any existing vanilla files - only adds the CE engine files."""
+    """Download and place the fallout2-ce binary + ce.dat in the active campaign's root.
+    Raises on any failure. Never touches any existing vanilla files - only adds the CE
+    engine files."""
     import tarfile
     import tempfile
     import urllib.request
@@ -111,8 +112,8 @@ def install_ce() -> None:
                 src = tf.extractfile(member)
                 if src is None:
                     raise RuntimeError(f"Could not read {name} from the release archive")
-                with open(GAME_DIR / name, "wb") as out:
+                with open(game_dir() / name, "wb") as out:
                     shutil.copyfileobj(src, out)
-    bin_path = GAME_DIR / "fallout2-ce"
+    bin_path = game_dir() / "fallout2-ce"
     bin_path.chmod(bin_path.stat().st_mode | 0o111)
     save_ce_state({"published_at": published_at, "asset": filename})
