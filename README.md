@@ -27,8 +27,9 @@ mod's `.ini` gets a proper UI, plus a save picker and a mod load-order editor.
 ## Requirements
 
 A Fallout 2 CE install, or a vanilla Fallout 2 copy - the launcher will offer to install CE
-itself the first time you press Play against a vanilla copy (Linux only for now; on Windows,
-install CE yourself from [the project's releases](https://github.com/fallout2-ce/fallout2-ce/releases)).
+itself the first time you press Play against a vanilla copy (Linux and Windows for now; on
+macOS, install CE yourself from [the project's releases](https://github.com/fallout2-ce/fallout2-ce/releases) -
+it ships as a `.dmg` there, which the launcher doesn't automate).
 The launcher otherwise only edits config files and starts `fallout2-ce` with
 `--dev-load-game=<slot>` to load a save.
 
