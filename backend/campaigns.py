@@ -34,7 +34,7 @@ class Campaign:
 CAMPAIGNS: list[Campaign] = [
     Campaign("ce", "Fallout 2", "", ("fallout2-ce", "fallout2-ce.exe")),
     Campaign("ettu", "Fallout et Tu", "Fallout1in2", ("fallout2-ce", "fallout2-ce.exe", "Fallout2.exe")),
-    Campaign("sonora", "Fallout: Sonora", "Sonora", ("fallout-fission", "fallout-fission.exe", "FSonora.exe")),
+    Campaign("sonora", "Fallout: Sonora", "Sonora", ("fallout-fission", "fallout-fission.exe")),
     Campaign("nevada", "Fallout 2: Nevada", "Nevada", ("fallout2-ce", "fallout2-ce.exe", "NevadaHD.exe")),
 ]
 
