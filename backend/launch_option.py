@@ -4,8 +4,18 @@ implement the behavior this line relies on."""
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from .paths import FROZEN, LAUNCHER_DIR
+
+
+def launcher_target() -> Path:
+    """The file to point Steam - or a non-Steam shortcut, see steam_shortcuts.py - at:
+    this launcher itself. A frozen build targets its own exe directly; a source checkout
+    targets launch.sh/launch.bat, which find and run f2launcher.py in turn."""
+    if FROZEN:
+        return Path(sys.executable)
+    return LAUNCHER_DIR / "launcher" / ("launch.bat" if sys.platform == "win32" else "launch.sh")
 
 
 def steam_launch_option(force_campaign: str | None = None) -> tuple[str, bool]:
@@ -25,8 +35,7 @@ def steam_launch_option(force_campaign: str | None = None) -> tuple[str, bool]:
     A frozen (PyInstaller) build targets its own exe directly - no launcher/ subfolder,
     no launch.sh/launch.bat, since the exe already contains all of their logic itself.
     """
-    target = sys.executable if FROZEN else LAUNCHER_DIR / "launcher" / ("launch.bat" if sys.platform == "win32"
-                                                                         else "launch.sh")
+    target = launcher_target()
     args = f" --campaign={force_campaign}" if force_campaign else ""
     if sys.platform == "win32":
         return f'"{target}"{args} %command%', False

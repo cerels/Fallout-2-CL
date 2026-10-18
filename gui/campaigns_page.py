@@ -8,11 +8,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
-from PySide6.QtWidgets import (QFileDialog, QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton,
-                               QScrollArea, QVBoxLayout, QWidget)
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import (QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
+                               QPushButton, QScrollArea, QVBoxLayout, QWidget)
 
 from backend import ce_install, ettu_install, nevada_install, sonora_install
 from backend.campaigns import CAMPAIGNS, Campaign, active_campaign
+from backend.launch_option import steam_launch_option
+from backend.steam_shortcuts import add_campaign_to_steam
 
 from .widgets import card
 
@@ -103,17 +106,56 @@ class CampaignsPage(QScrollArea):
         inner.addLayout(row)
 
         extra_btn = None
+        steam_section = None
+        add_to_steam_btn = None
+
         if campaign.id == "ettu":
             extra_row = QHBoxLayout()
-            extra_row.setContentsMargins(16, 0, 16, 12)
+            extra_row.setContentsMargins(16, 0, 16, 8)
             extra_btn = QPushButton("Extract Fallout 1 data…")
             extra_btn.clicked.connect(self._on_extract_fallout1)
             extra_row.addWidget(extra_btn)
             extra_row.addStretch()
             inner.addLayout(extra_row)
 
+            steam_section = QWidget()
+            steam_lay = QVBoxLayout(steam_section)
+            steam_lay.setContentsMargins(0, 0, 0, 0)
+            steam_lay.setSpacing(4)
+            steam_label = QLabel(
+                "Paste into Fallout 1's own Steam entry (Properties → General → Launch Options) "
+                "so pressing Play there opens straight into Et Tu instead:")
+            steam_label.setObjectName("muted")
+            steam_label.setWordWrap(True)
+            steam_label.setContentsMargins(16, 0, 16, 0)
+            steam_lay.addWidget(steam_label)
+            steam_row = QHBoxLayout()
+            steam_row.setContentsMargins(16, 0, 16, 12)
+            steam_field = QLineEdit(steam_launch_option(force_campaign="ettu")[0])
+            steam_field.setReadOnly(True)
+            steam_field.setCursorPosition(0)
+            copy_btn = QPushButton("Copy")
+            copy_btn.clicked.connect(lambda: QGuiApplication.clipboard().setText(steam_field.text()))
+            steam_row.addWidget(steam_field, 1)
+            steam_row.addWidget(copy_btn)
+            steam_lay.addLayout(steam_row)
+            inner.addWidget(steam_section)
+
+        if campaign.id in ("sonora", "nevada"):
+            steam_row = QHBoxLayout()
+            steam_row.setContentsMargins(16, 0, 16, 12)
+            add_to_steam_btn = QPushButton("Add to Steam…")
+            add_to_steam_btn.setToolTip(
+                "Adds this launcher as a non-Steam game, forced into this campaign - "
+                f"{campaign.name} has no Steam app of its own to paste launch options into.")
+            add_to_steam_btn.clicked.connect(lambda: self._on_add_to_steam(campaign))
+            steam_row.addWidget(add_to_steam_btn)
+            steam_row.addStretch()
+            inner.addLayout(steam_row)
+
         self._cards[campaign.id] = {
             "status": status, "action_btn": action_btn, "switch_btn": switch_btn, "extra_btn": extra_btn,
+            "steam_section": steam_section, "add_to_steam_btn": add_to_steam_btn,
         }
         return frame
 
@@ -136,6 +178,10 @@ class CampaignsPage(QScrollArea):
             w["switch_btn"].setVisible(is_installed and not is_active)
             if w["extra_btn"] is not None:
                 w["extra_btn"].setVisible(is_installed)
+            if w["steam_section"] is not None:
+                w["steam_section"].setVisible(is_installed)
+            if w["add_to_steam_btn"] is not None:
+                w["add_to_steam_btn"].setVisible(is_installed)
 
     def _on_install(self, campaign: Campaign):
         w = self._cards[campaign.id]
@@ -168,3 +214,20 @@ class CampaignsPage(QScrollArea):
             return
         QMessageBox.information(self, "Fallout 1 data extracted", "Done - Et Tu is ready to play.")
         self.refresh()
+
+    def _on_add_to_steam(self, campaign: Campaign):
+        if QMessageBox.question(
+                self, "Add to Steam",
+                f"Add this launcher to your Steam library as a non-Steam game, forced into "
+                f"{campaign.name}? This edits Steam's own shortcuts.vdf (backed up first).",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            add_campaign_to_steam(campaign)
+        except Exception as exc:
+            QMessageBox.warning(self, "Couldn't add to Steam", str(exc))
+            return
+        QMessageBox.information(
+            self, "Added to Steam",
+            "Restart Steam to see it in your library (under the non-Steam games section).")
