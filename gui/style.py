@@ -4,6 +4,7 @@ from __future__ import annotations
 
 ACCENT = "#5dfc8a"
 AMBER = "#ffb84d"
+DANGER = "#ff5c5c"
 
 STYLESHEET = f"""
     * {{ font-size: 10.5pt; }}
@@ -15,6 +16,7 @@ STYLESHEET = f"""
     QLabel#title {{ font-family: monospace; font-size: 26pt; font-weight: 800; color: {ACCENT};
                    letter-spacing: 4px; }}
     QLabel#subtitle {{ color: #86a38b; font-size: 10pt; }}
+    QLabel#subtitle[warn="true"] {{ color: {DANGER}; font-weight: 700; }}
     QLabel#pagetitle {{ font-size: 17pt; font-weight: 700; color: #e8f7ea; }}
     QLabel#cardtitle {{ font-size: 11pt; font-weight: 700; color: {ACCENT};
                        text-transform: uppercase; letter-spacing: 1px; }}
@@ -44,6 +46,8 @@ STYLESHEET = f"""
     QPushButton#primary {{ background: {ACCENT}; color: #06210f; border: none; font-weight: 800;
                           font-size: 12.5pt; padding: 10px 28px; letter-spacing: 1px; }}
     QPushButton#primary:hover {{ background: #86ffa8; }}
+    QPushButton#primary[install="true"] {{ background: {AMBER}; color: #2a1800; }}
+    QPushButton#primary[install="true"]:hover {{ background: #ffce85; }}
     QPushButton#keycap {{ font-family: monospace; min-width: 150px; }}
     QPushButton#keycap[capturing="true"] {{ border-color: {AMBER}; color: {AMBER}; }}
     QToolButton#reset {{ background: transparent; border: none; color: #86a38b; font-size: 13pt; }}

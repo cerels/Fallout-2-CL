@@ -17,15 +17,22 @@ mod's `.ini` gets a proper UI, plus a save picker and a mod load-order editor.
   The first save of each session copies the originals to `backup/launcher/<timestamp>/`.
 - **Modular**: settings are described by TOML schemas. Mods can ship their own, and any mod `.ini`
   without a schema still gets a tab generated from its comments.
+- **Installs CE itself**: pointed at a vanilla Fallout 2 copy (game data present, no `fallout2-ce`
+  binary), pressing Play offers to download and install the engine from
+  [fallout2-ce/fallout2-ce](https://github.com/fallout2-ce/fallout2-ce)'s current build. The
+  Launcher page also shows the exact Steam Launch Options line for your OS, with a Copy button.
 
 ## Requirements
 
 - Python 3.11+ and PySide6 (Qt 6). On most Linux desktops: `python3-pyside6` from your distro,
   or `pip install PySide6`.
-- A Fallout 2 CE install. The launcher only edits config files and starts `fallout2-ce` with
-  `--dev-load-game=<slot>` to load a save.
+- A Fallout 2 CE install, or a vanilla Fallout 2 copy - the launcher will offer to install CE
+  itself the first time you press Play against a vanilla copy. It otherwise only edits config
+  files and starts `fallout2-ce` with `--dev-load-game=<slot>` to load a save.
 
-Tested on Linux. Windows should work for editing settings; launching uses `os.execv`.
+Tested on Linux. Windows should work for editing settings; launching uses `os.execv`. The
+auto-install only runs on Linux for now; on Windows, install CE yourself from
+[the project's releases](https://github.com/fallout2-ce/fallout2-ce/releases).
 
 ## Install
 
@@ -43,7 +50,9 @@ Fallout 2/
     └── schemas/
 ```
 
-Run it with `launcher/launch.sh` (or `python3 launcher/f2launcher.py`).
+Run it with `launcher/launch.sh` (or `python3 launcher/f2launcher.py`). On Windows, use
+`launcher/launch.bat` instead - same options, same fallback to starting the game directly if
+Python isn't found.
 
 **Steam:** set the game's launch options to
 
@@ -52,7 +61,13 @@ Run it with `launcher/launch.sh` (or `python3 launcher/f2launcher.py`).
 ```
 
 The `#` stops Steam from also starting the original game. Pressing **Play** replaces the
-launcher process with the game, so Steam keeps tracking it.
+launcher process with the game, so Steam keeps tracking it. The Launcher page in the app shows
+this line with your actual path already filled in, and a Copy button.
+
+On Windows, use `"C:\path\to\Fallout 2\launcher\launch.bat" %command%` instead - but note this is
+**unverified**: `cmd.exe` has no equivalent to the `#` trick above, so Steam may end up running
+both the launcher and the game in sequence rather than replacing one with the other. Please
+confirm on a real Windows+Steam setup and adjust if needed.
 
 ### Command-line options
 

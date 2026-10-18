@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QThread, Qt, Signal
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QMessageBox, QPushButton, QStackedWidget, QVBoxLayout, QWidget)
 
+from backend.ce_install import install_ce, needs_ce_install
 from backend.mod_catalog import CatalogEntry
 from backend.paths import GAME_BIN
 from backend.schema import Catalog, Page
@@ -18,13 +19,28 @@ from .store import Store
 from .style import AMBER
 
 
+class CEInstallThread(QThread):
+    failed = Signal(str)
+    done = Signal()
+
+    def run(self):
+        try:
+            install_ce()
+        except Exception as exc:  # surfaced to the UI thread via signal, never silent
+            self.failed.emit(str(exc))
+        else:
+            self.done.emit()
+
+
 class Window(QMainWindow):
     def __init__(self, store: Store, catalog: Catalog, mod_catalog: list[CatalogEntry]):
         super().__init__()
         self.store = store
+        self.catalog = catalog
         self.setWindowTitle("Fallout 2 Launcher")
         self.resize(1180, 820)
         self.result: tuple[str, int | None] | None = None
+        self._ce_thread: QThread | None = None
         root = QWidget()
         root.setObjectName("root")
         self.setCentralWidget(root)
@@ -44,12 +60,12 @@ class Window(QMainWindow):
         title = QLabel("FALLOUT 2")
         title.setObjectName("title")
         title.setContentsMargins(22, 0, 12, 0)
-        subtitle = QLabel(" · ".join(["Community Edition", *catalog.headlines]))
-        subtitle.setObjectName("subtitle")
-        subtitle.setContentsMargins(24, 0, 12, 8)
-        subtitle.setWordWrap(True)
+        self.subtitle = QLabel()
+        self.subtitle.setObjectName("subtitle")
+        self.subtitle.setContentsMargins(24, 0, 12, 8)
+        self.subtitle.setWordWrap(True)
         sl.addWidget(title)
-        sl.addWidget(subtitle)
+        sl.addWidget(self.subtitle)
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search settings…")
         self.search.setClearButtonEnabled(True)
@@ -144,7 +160,17 @@ class Window(QMainWindow):
         self.save_btn.setEnabled(bool(n))
 
     def update_play(self):
-        self.play_btn.setText(self.play.play_label())
+        install_needed = needs_ce_install()
+        self.play_btn.setText("Install CE" if install_needed else self.play.play_label())
+        self.play_btn.setProperty("install", install_needed)
+        self.play_btn.style().unpolish(self.play_btn)
+        self.play_btn.style().polish(self.play_btn)
+        self.subtitle.setText(
+            "Community Edition — not installed" if install_needed
+            else " · ".join(["Community Edition", *self.catalog.headlines]))
+        self.subtitle.setProperty("warn", install_needed)
+        self.subtitle.style().unpolish(self.subtitle)
+        self.subtitle.style().polish(self.subtitle)
 
     def save(self) -> bool:
         err = self.store.save()
@@ -158,10 +184,38 @@ class Window(QMainWindow):
         if self.store.dirty_count() and not self.save():
             return
         if not GAME_BIN.is_file():
-            QMessageBox.critical(self, "Game not found", f"{GAME_BIN} is missing.")
+            if needs_ce_install():
+                self._offer_ce_install()
+            else:
+                QMessageBox.critical(self, "Game not found", f"{GAME_BIN} is missing.")
             return
         self.result = (self.play.mode, self.play.slot)
         self.close()
+
+    def _offer_ce_install(self):
+        if QMessageBox.question(
+                self, "Install Fallout 2 CE",
+                "This looks like a vanilla Fallout 2 install, but this launcher needs the "
+                "Community Edition engine to run the game. Download and install it now?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes) != QMessageBox.StandardButton.Yes:
+            return
+        self.play_btn.setEnabled(False)
+        self.play_btn.setText("Installing CE…")
+        self._ce_thread = CEInstallThread()
+        self._ce_thread.done.connect(self._ce_install_finished)
+        self._ce_thread.failed.connect(self._ce_install_finished)
+        self._ce_thread.start()
+
+    def _ce_install_finished(self, error: str | None = None):
+        self._ce_thread = None
+        self.play_btn.setEnabled(True)
+        self.update_play()
+        if error:
+            QMessageBox.critical(self, "Install failed", error)
+            return
+        QMessageBox.information(self, "Fallout 2 CE installed",
+                                "Fallout 2 CE is installed. Press Play when you're ready.")
 
     def closeEvent(self, ev):
         if self.result is None and self.store.dirty_count():
