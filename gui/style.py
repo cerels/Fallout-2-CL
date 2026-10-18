@@ -23,6 +23,8 @@ STYLESHEET = f"""
     QLabel#rowtitle {{ font-weight: 600; color: #e6f5e8; }}
     QLabel#dot {{ color: {AMBER}; font-size: 13pt; }}
     QFrame#sidebar {{ background: #101812; border-right: 1px solid #1f3324; }}
+    QWidget#campaignswitcher {{ border-radius: 8px; }}
+    QWidget#campaignswitcher:hover {{ background: #16241a; }}
     QFrame#card {{ background: #131c15; border: 1px solid #1f3324; border-radius: 10px; }}
     QFrame#row {{ border-top: 1px solid #1a2a1e; }}
     QFrame#row[first="true"] {{ border-top: none; }}

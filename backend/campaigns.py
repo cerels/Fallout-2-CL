@@ -22,6 +22,8 @@ class Campaign:
     name: str
     subdir: str  # "" for Vanilla/CE itself; relative to LAUNCHER_DIR otherwise
     bin_names: tuple[str, ...]  # candidate engine binary filenames, checked in order
+    badge: str  # short placeholder shown at the campaign switcher until real artwork exists
+    accent: str  # badge color (hex)
 
     @property
     def root(self) -> Path:
@@ -32,10 +34,12 @@ class Campaign:
 
 
 CAMPAIGNS: list[Campaign] = [
-    Campaign("ce", "Fallout 2", "", ("fallout2-ce", "fallout2-ce.exe")),
-    Campaign("ettu", "Fallout et Tu", "Fallout1in2", ("fallout2-ce", "fallout2-ce.exe", "Fallout2.exe")),
-    Campaign("sonora", "Fallout: Sonora", "Sonora", ("fallout-fission", "fallout-fission.exe")),
-    Campaign("nevada", "Fallout 2: Nevada", "Nevada", ("fallout2-ce", "fallout2-ce.exe")),
+    Campaign("ce", "Fallout 2", "", ("fallout2-ce", "fallout2-ce.exe"), "F2", "#5dfc8a"),
+    Campaign("ettu", "Fallout et Tu", "Fallout1in2", ("fallout2-ce", "fallout2-ce.exe", "Fallout2.exe"),
+             "ET", "#5d9dfc"),
+    Campaign("sonora", "Fallout: Sonora", "Sonora", ("fallout-fission", "fallout-fission.exe"),
+             "SO", "#ffb84d"),
+    Campaign("nevada", "Fallout 2: Nevada", "Nevada", ("fallout2-ce", "fallout2-ce.exe"), "NV", "#ff7a5d"),
 ]
 
 
@@ -45,6 +49,12 @@ def by_id(campaign_id: str) -> Campaign | None:
 
 def installed_campaigns() -> list[Campaign]:
     return [c for c in CAMPAIGNS if c.installed()]
+
+
+def active_campaign() -> Campaign:
+    from .paths import game_dir
+    root = game_dir()
+    return next((c for c in CAMPAIGNS if c.root == root), by_id(DEFAULT_ID))
 
 
 def forced_campaign_id(argv: list[str]) -> str | None:

@@ -232,6 +232,21 @@ class ResolutionEdit(QWidget):
         self.edited.emit(f"{self.w.value()}x{self.h.value()}")
 
 
+class ClickableWidget(QWidget):
+    """A plain QWidget that emits clicked() on a left click - for a header area that
+    should act like a button but needs custom layout (badge + title + subtitle)."""
+    clicked = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+
+    def mousePressEvent(self, ev):
+        if ev.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(ev)
+
+
 def card(title: str) -> tuple[QFrame, QVBoxLayout]:
     frame = QFrame()
     frame.setObjectName("card")
