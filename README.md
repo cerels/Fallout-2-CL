@@ -21,20 +21,57 @@ mod's `.ini` gets a proper UI, plus a save picker and a mod load-order editor.
   binary), pressing Play offers to download and install the engine from
   [fallout2-ce/fallout2-ce](https://github.com/fallout2-ce/fallout2-ce)'s current build. The
   Launcher page also shows the exact Steam Launch Options line for your OS, with a Copy button.
+- **Portable**: ships as a single-file executable per OS (PyInstaller) with no Python or Qt
+  install needed - download one file, drop it in the game folder, done.
 
 ## Requirements
 
-- Python 3.11+ and PySide6 (Qt 6). On most Linux desktops: `python3-pyside6` from your distro,
-  or `pip install PySide6`.
-- A Fallout 2 CE install, or a vanilla Fallout 2 copy - the launcher will offer to install CE
-  itself the first time you press Play against a vanilla copy. It otherwise only edits config
-  files and starts `fallout2-ce` with `--dev-load-game=<slot>` to load a save.
-
-Tested on Linux. Windows should work for editing settings; launching uses `os.execv`. The
-auto-install only runs on Linux for now; on Windows, install CE yourself from
-[the project's releases](https://github.com/fallout2-ce/fallout2-ce/releases).
+A Fallout 2 CE install, or a vanilla Fallout 2 copy - the launcher will offer to install CE
+itself the first time you press Play against a vanilla copy (Linux only for now; on Windows,
+install CE yourself from [the project's releases](https://github.com/fallout2-ce/fallout2-ce/releases)).
+The launcher otherwise only edits config files and starts `fallout2-ce` with
+`--dev-load-game=<slot>` to load a save.
 
 ## Install
+
+### Prebuilt binary (recommended)
+
+Download `f2launcher` (Linux), `f2launcher-macos` (macOS) or `f2launcher.exe` (Windows) from
+[the Releases page](../../releases/latest) and drop it directly into the game folder - no
+Python or PySide6 install needed, it's bundled in:
+
+```
+Fallout 2/
+├── fallout2-ce
+├── fallout2.cfg
+├── mods/
+└── f2launcher          ← just this one file (chmod +x on Linux/macOS)
+```
+
+**Steam:** set the game's launch options to
+
+```
+"/path/to/Fallout 2/f2launcher" # %command%
+```
+
+The `#` stops Steam from also starting the original game. Pressing **Play** replaces the
+launcher process with the game, so Steam keeps tracking it. The Launcher page in the app shows
+this line with your actual path already filled in, and a Copy button.
+
+On Windows, use `"C:\path\to\Fallout 2\f2launcher.exe" %command%` instead - but note this is
+**unverified**: `cmd.exe` has no equivalent to the `#` trick above, so Steam may end up running
+both the launcher and the game in sequence rather than replacing one with the other. Please
+confirm on a real Windows+Steam setup and adjust if needed.
+
+Binaries are built per-OS by [.github/workflows/build.yml](.github/workflows/build.yml)
+(PyInstaller, see `packaging/f2launcher.spec`) whenever a `vX.Y.Z` tag is pushed.
+
+### From source
+
+For development, or if you'd rather use your distro's own PySide6 package:
+
+- Python 3.11+ and PySide6 (Qt 6): `python3-pyside6` from your distro, or `pip install PySide6`.
+- Tested on Linux. Windows should work for editing settings; launching uses `os.execv`.
 
 Copy this folder into the game folder as `launcher/`:
 
@@ -52,22 +89,9 @@ Fallout 2/
 
 Run it with `launcher/launch.sh` (or `python3 launcher/f2launcher.py`). On Windows, use
 `launcher/launch.bat` instead - same options, same fallback to starting the game directly if
-Python isn't found.
-
-**Steam:** set the game's launch options to
-
-```
-"/path/to/Fallout 2/launcher/launch.sh" # %command%
-```
-
-The `#` stops Steam from also starting the original game. Pressing **Play** replaces the
-launcher process with the game, so Steam keeps tracking it. The Launcher page in the app shows
-this line with your actual path already filled in, and a Copy button.
-
-On Windows, use `"C:\path\to\Fallout 2\launcher\launch.bat" %command%` instead - but note this is
-**unverified**: `cmd.exe` has no equivalent to the `#` trick above, so Steam may end up running
-both the launcher and the game in sequence rather than replacing one with the other. Please
-confirm on a real Windows+Steam setup and adjust if needed.
+Python isn't found. The Steam launch-options line is the same idea as above, just pointing at
+`launcher/launch.sh` / `launcher/launch.bat` instead of the prebuilt binary - the Launcher page
+shows whichever one applies to how you're actually running it.
 
 ### Command-line options
 

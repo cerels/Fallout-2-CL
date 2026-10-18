@@ -1,0 +1,69 @@
+name: Build launcher binaries
+
+# Builds a single-file executable per OS with PyInstaller (packaging/f2launcher.spec)
+# and attaches them to a GitHub Release. Each OS must build natively - PyInstaller
+# can't cross-compile - hence the matrix instead of one job.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: f2launcher-linux
+          - os: windows-latest
+            artifact: f2launcher-windows.exe
+          - os: macos-latest
+            artifact: f2launcher-macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install PySide6 pyinstaller
+
+      - name: Build
+        run: pyinstaller --noconfirm packaging/f2launcher.spec
+
+      - name: Rename binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: mv dist/f2launcher "${{ matrix.artifact }}"
+
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Move-Item dist/f2launcher.exe "${{ matrix.artifact }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Restore exec bit on Unix binaries
+        run: chmod +x dist/f2launcher-linux dist/f2launcher-macos
+
+      - name: Create release and upload binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" dist/* --generate-notes

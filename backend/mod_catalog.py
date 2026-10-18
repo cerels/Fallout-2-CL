@@ -8,7 +8,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .paths import GAME_DIR, ci_path, mod_installed
+from .paths import RESOURCE_DIR, ci_path, mod_installed
 
 
 @dataclass
@@ -31,7 +31,7 @@ class CatalogEntry:
 def load_mod_catalog() -> list[CatalogEntry]:
     import tomllib
 
-    path = GAME_DIR / "launcher" / "schemas" / "catalog.toml"
+    path = RESOURCE_DIR / "schemas" / "catalog.toml"
     try:
         doc = tomllib.loads(path.read_text("utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):

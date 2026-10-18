@@ -15,7 +15,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .paths import GAME_BIN, GAME_DIR, ci_path, mod_installed
+from .paths import GAME_BIN, RESOURCE_DIR, ci_path, mod_installed
 
 SETTING_TYPES = {"bool", "choice", "int", "float", "volume", "key", "resolution", "text"}
 
@@ -116,7 +116,7 @@ class Catalog:
 
 
 def schema_paths() -> list[Path]:
-    builtin = GAME_DIR / "launcher" / "schemas"
+    builtin = RESOURCE_DIR / "schemas"
     paths = sorted(builtin.glob("*.toml")) + sorted((builtin / "mods").glob("*.toml"))
     mods_dir = ci_path("mods")
     if mods_dir.is_dir():
@@ -172,7 +172,7 @@ def load_catalog() -> Catalog:
     import tomllib
 
     cat = Catalog()
-    core_dir = GAME_DIR / "launcher" / "schemas"
+    core_dir = RESOURCE_DIR / "schemas"
     for path in schema_paths():
         is_core = path.parent == core_dir
         try:
