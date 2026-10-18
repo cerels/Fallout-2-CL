@@ -16,6 +16,15 @@ if FROZEN:
     # bundled schemas/ live in the temp dir it extracts itself to (sys._MEIPASS).
     GAME_DIR = Path(sys.executable).resolve().parent
     RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", GAME_DIR))
+    # A frozen Python sometimes can't locate the OS's own CA bundle (varies by distro -
+    # notably atomic/immutable ones), breaking HTTPS downloads with CERTIFICATE_VERIFY_FAILED.
+    # Point it at certifi's bundled one explicitly instead of relying on OS discovery.
+    import os
+    try:
+        import certifi
+        os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+    except ImportError:
+        pass
 else:
     # Source checkout: backend/paths.py is <GAME_DIR>/launcher/backend/paths.py.
     GAME_DIR = Path(__file__).resolve().parent.parent.parent

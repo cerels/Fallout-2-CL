@@ -30,7 +30,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install PySide6 pyinstaller
+        run: pip install PySide6 pyinstaller certifi
 
       - name: Build
         run: pyinstaller --noconfirm packaging/f2launcher.spec
