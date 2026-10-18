@@ -51,6 +51,11 @@ class UpdateCheckThread(QThread):
 
 
 class ModsPage(QWidget):
+    # Installing/deleting a mod can change which schema-backed settings exist (its own
+    # page only appears once its .ini is actually on disk) - the page set is built once
+    # from a snapshot of the catalog, so the window needs to reload it.
+    needs_reload = Signal()
+
     def __init__(self, store: Store, mod_catalog: list[CatalogEntry]):
         super().__init__()
         self.store = store
@@ -202,9 +207,12 @@ class ModsPage(QWidget):
             flags &= ~Qt.ItemFlag.ItemIsDropEnabled
             it.setFlags(flags)
             it.setCheckState(Qt.CheckState.Checked if enabled else Qt.CheckState.Unchecked)
+            # No catalog entry (this launcher didn't download it) doesn't mean no
+            # description - a bundled schema (e.g. restoration-project.toml) may already
+            # describe this exact file, for mods installed as part of a larger package.
+            subtitle = entry.description if entry else self.store.catalog.mod_info.get(name.lower(), "")
             widget = self._row_widget(key=name, title=entry.name if entry else name,
-                                       subtitle=entry.description if entry else "",
-                                       entry=entry, installed=True)
+                                       subtitle=subtitle, entry=entry, installed=True)
             self.list.addItem(it)
             self.list.setItemWidget(it, widget)
             it.setSizeHint(widget.sizeHint())
@@ -268,7 +276,10 @@ class ModsPage(QWidget):
             self.revert()  # restores normal button state/text
             return
         self._pending_updates.pop(entry.id, None)
-        self.revert()
+        # A newly-installed mod can have its own schema-backed settings page waiting to
+        # appear - reload rebuilds the whole page set (including this one), so there's no
+        # point reverting this soon-to-be-replaced instance first.
+        self.needs_reload.emit()
 
     def _delete_row(self, dat_name: str, entry: CatalogEntry | None):
         extra = [entry.ini] if entry and entry.ini else []
@@ -284,7 +295,7 @@ class ModsPage(QWidget):
             if state.pop(entry.id, None) is not None:
                 save_catalog_state(state)
             self._pending_updates.pop(entry.id, None)
-        self.revert()
+        self.needs_reload.emit()
 
     def _check_for_updates(self):
         candidates = [e for e in self.mod_catalog if e.installed() and e.github]

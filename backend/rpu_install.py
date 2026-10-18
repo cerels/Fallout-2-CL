@@ -4,14 +4,21 @@ which already describes its settings once installed.
 
 The official release zip (github.com/BGforgeNet/Fallout2_Restoration_Project) is a full
 classic-sfall install package meant to be unzipped by hand onto a vanilla Fallout 2 copy:
-alongside RPU's own content it also bundles fallout2.exe, ddraw.dll/.ini, sfall.dat,
-f2_res's own files, a handful of *other* mods' dat/ini files it happens to redistribute
-(NPC Armor, Party Orders, sfall-mods.ini - already covered by mod_catalog.py's own
-catalog), translations/, and its own mods_order.txt. None of that belongs on a CE
-install, and blindly extracting mods_order.txt would overwrite whatever load order the
-user already has. So this only pulls out RPU's own pieces: its appearance/ data, the
-restored music, and its own mods/*.dat + mods/rpu.ini - merged into the existing mods/
+alongside RPU's own content it bundles fallout2.exe, ddraw.dll/.ini, sfall.dat, f2_res's
+own files, its own mods_order.txt, and - deliberately, this is the officially-tested
+combination - NPC Armor, Party Orders and the Unofficial Patch's settings. None of the
+classic-engine files belong on a CE install, and blindly extracting mods_order.txt would
+overwrite whatever load order the user already has, but everything under mods/ itself
+(RPU's own dat files plus the bundled NPC Armor/Party Orders/Unofficial Patch/ammo-mod
+configs) is exactly what's needed for those mods' own bundled schemas
+(schemas/mods/npc-armor.toml, party-orders.toml, unofficial-patch.toml, sfall-mods.toml)
+to find their files and show up - so it's all extracted, merged into the existing mods/
 setup via the same enable_mod_file() helper the regular mod catalog uses.
+
+RPU also needs ddraw.ini's BoostScriptDialogLimit raised from its shipped default (0) to 1 -
+without it, fallout2-ce throws "BoostScriptDialogLimit not enabled" and kicks you back to
+the main menu the moment a save touches RPU's restored content, which adds far more
+dialog/script names than vanilla's 1450-name limit. install_rpu() sets it directly.
 """
 
 from __future__ import annotations
@@ -20,6 +27,7 @@ import shutil
 import zipfile
 from pathlib import Path
 
+from .ini_file import IniFile
 from .mod_catalog import delete_mod_files, enable_mod_file
 from .paths import ci_path, mod_installed
 
@@ -94,17 +102,30 @@ def check_for_rpu_update() -> str | None:
 
 def _wanted_dest(parts: list[str]) -> Path | None:
     """Where to extract a zip entry's parts, or None to skip it - see module docstring
-    for why most of the archive is skipped."""
+    for why most of the archive is skipped. Everything directly under mods/ is wanted
+    except mods_order.txt itself, which must never overwrite the user's own load order."""
     if parts[0] == "appearance" or parts[:2] == ["data", "sound"]:
         return ci_path("/".join(parts))
-    if parts[0] == "mods" and len(parts) == 2 and parts[1] in (*OPTIONAL_DAT_FILES, "rpu.dat", "rpu.ini"):
+    if parts[0] == "mods" and len(parts) == 2 and parts[1].lower() != "mods_order.txt":
         return ci_path(f"mods/{parts[1]}")
     return None
 
 
+def _enable_boost_script_dialog_limit() -> None:
+    """See module docstring - required for RPU's restored content to work at all."""
+    path = ci_path("ddraw.ini")
+    if not path.is_file():
+        return
+    ini = IniFile(path)
+    if ini.get("Misc", "BoostScriptDialogLimit") != "1":
+        ini.set("Misc", "BoostScriptDialogLimit", "1")
+        ini.save()
+
+
 def install_rpu() -> None:
-    """Download RPU's current release and extract only its own content. Raises on any
-    failure; never touches mods_order.txt beyond enabling rpu.dat itself."""
+    """Download RPU's current release and extract its content (including the mods it
+    officially bundles - NPC Armor, Party Orders, Unofficial Patch settings). Raises on
+    any failure; never touches mods_order.txt beyond enabling rpu.dat itself."""
     import tempfile
     import urllib.request
 
@@ -129,6 +150,7 @@ def install_rpu() -> None:
             if not copied:
                 raise RuntimeError("RPU archive layout has changed - no recognized files found")
     enable_mod_file("rpu.dat")
+    _enable_boost_script_dialog_limit()
     save_rpu_state({"version": version})
 
 

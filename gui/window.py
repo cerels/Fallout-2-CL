@@ -147,6 +147,12 @@ class Window(QMainWindow):
         self.store = store
         self.catalog = catalog
 
+        # Preserve whichever page the user was on (e.g. still on the RPU tab right after
+        # installing it) rather than always bouncing back to Play.
+        current_name = None
+        if getattr(self, "pages", None) and 0 <= self.nav.currentRow() < len(self.pages):
+            current_name = self.pages[self.nav.currentRow()][0]
+
         self.nav.clear()
         while self.stack.count():
             w = self.stack.widget(0)
@@ -170,15 +176,18 @@ class Window(QMainWindow):
                 rpu_page = page
                 continue
             self.pages.append((page.name, SettingsPage(page.name, page.groups, page.intro, store, catalog)))
-        self.pages.append(("Restoration Project", RpuPage(rpu_page or Page("Restoration Project"), store, catalog)))
+        rpu_widget = RpuPage(rpu_page or Page("Restoration Project"), store, catalog)
+        rpu_widget.needs_reload.connect(self.reload_pages)
+        self.pages.append(("Restoration Project", rpu_widget))
         self.mods = ModsPage(store, mod_catalog)
+        self.mods.needs_reload.connect(self.reload_pages)
         store.extras.append(self.mods)
         self.pages.append(("Mods", self.mods))
         self.pages.append(("Launcher", LauncherPage(launcher_page or Page("Launcher"), store, catalog)))
         for name, page in self.pages:
             self.nav.addItem(QListWidgetItem(name))
             self.stack.addWidget(page)
-        self.nav.setCurrentRow(0)
+        self.nav.setCurrentRow(self._page_row(current_name) if current_name else 0)
 
         store.dirty_changed.connect(self.update_status)
         self.campaigns_page.refresh()
@@ -186,7 +195,18 @@ class Window(QMainWindow):
         self.update_play()
 
     def _page_row(self, name: str) -> int:
-        return next(i for i, (n, _) in enumerate(self.pages) if n == name)
+        return next((i for i, (n, _) in enumerate(self.pages) if n == name), 0)
+
+    def reload_pages(self):
+        """Re-read the settings catalog for the currently active campaign (no campaign
+        change) - installing or deleting a mod/RPU can change which schema-backed
+        settings pages exist, so the page set needs rebuilding to show that live."""
+        if not self._confirm_unsaved():
+            return
+        catalog = load_catalog()
+        for err in catalog.errors:
+            print(f"schema error: {err}", file=sys.stderr)
+        self._build_pages(Store(catalog), catalog, load_mod_catalog())
 
     def _update_campaign_header(self):
         c = active_campaign()

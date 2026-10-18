@@ -33,6 +33,11 @@ class _InstallThread(QThread):
 
 
 class RpuPage(SettingsPage):
+    # Installing/uninstalling can change which schema-backed settings exist (e.g. Party
+    # Orders' own page only appears once its .ini is actually on disk) - the page set is
+    # built once from a snapshot of the catalog, so the window needs to reload it.
+    needs_reload = Signal()
+
     def __init__(self, page: Page, store: Store, catalog: Catalog):
         super().__init__(page.name, page.groups, page.intro, store, catalog)
         self._thread: QThread | None = None
@@ -67,9 +72,11 @@ class RpuPage(SettingsPage):
         if installed():
             version = load_rpu_state().get("version", "an unknown version")
             self.status.setText(
-                f"Installed ({version}). Restores cut content and fixes to Fallout 2 - the "
-                "optional extras (enhanced world map, new animations, Cassidy's voice/head, ...) "
-                "can be switched on individually from the Mods page.")
+                f"Installed ({version}). Restores cut content and fixes to Fallout 2, and brings "
+                "its officially-bundled NPC Armor, Party Orders and Unofficial Patch along with it "
+                "(their own settings pages appear once installed) - the optional extras (enhanced "
+                "world map, new animations, Cassidy's voice/head, ...) can be switched on "
+                "individually from the Mods page.")
             self.action_btn.setText("Check for updates")
             self.uninstall_btn.setVisible(True)
         else:
@@ -103,7 +110,12 @@ class RpuPage(SettingsPage):
         self.action_btn.setEnabled(True)
         if error:
             QMessageBox.warning(self, "Install failed", f"Restoration Project: {error}")
-        self._refresh()
+            self._refresh()
+            return
+        # A successful install/update can change which schema-backed settings exist -
+        # the reload rebuilds this whole page (and every other), so there's no point
+        # refreshing this soon-to-be-replaced instance first.
+        self.needs_reload.emit()
 
     def _on_uninstall(self):
         if QMessageBox.question(
@@ -113,4 +125,4 @@ class RpuPage(SettingsPage):
                 QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
         delete_rpu()
-        self._refresh()
+        self.needs_reload.emit()
