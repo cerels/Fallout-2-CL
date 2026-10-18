@@ -15,10 +15,16 @@ configs) is exactly what's needed for those mods' own bundled schemas
 to find their files and show up - so it's all extracted, merged into the existing mods/
 setup via the same enable_mod_file() helper the regular mod catalog uses.
 
-RPU also needs ddraw.ini's BoostScriptDialogLimit raised from its shipped default (0) to 1 -
-without it, fallout2-ce throws "BoostScriptDialogLimit not enabled" and kicks you back to
-the main menu the moment a save touches RPU's restored content, which adds far more
-dialog/script names than vanilla's 1450-name limit. install_rpu() sets it directly.
+RPU also needs several ddraw.ini (sfall) settings its shipped defaults don't have - CE
+enforces some of them as hard limits sized to vanilla content (e.g. BoostScriptDialogLimit
+gates the number of dialog/script names; WorldMapSlots the enhanced world map's slot count)
+and throws a friendly in-game error naming the exact key when they're wrong, which
+otherwise means fixing them one at a time as each is discovered by hitting it in play.
+Rather than guessing at the complete set, install_rpu() reads RPU's *own* bundled ddraw.ini
+(from the same zip, already being downloaded) and merges every key it sets into the
+existing ddraw.ini - this is the exact configuration RPU's own Windows installer would put
+in place, just applied as a merge (via IniFile, so only the lines that actually change are
+touched) rather than overwriting the whole file and losing anything else already there.
 """
 
 from __future__ import annotations
@@ -27,6 +33,7 @@ import shutil
 import zipfile
 from pathlib import Path
 
+from .dat import parse_ini_text
 from .ini_file import IniFile
 from .mod_catalog import delete_mod_files, enable_mod_file
 from .paths import ci_path, mod_installed
@@ -111,21 +118,30 @@ def _wanted_dest(parts: list[str]) -> Path | None:
     return None
 
 
-def _enable_boost_script_dialog_limit() -> None:
-    """See module docstring - required for RPU's restored content to work at all."""
+def _apply_rpu_ddraw_settings(rpu_ddraw_text: str) -> None:
+    """Merge every (section, key) RPU's own bundled ddraw.ini sets into the existing one -
+    see module docstring. Only changes values that actually differ; creates a missing
+    section (e.g. RPU's ddraw.ini has a [Debugging]/[Scripts] the current file may lack)
+    the same way IniFile.set() already does for any other missing key."""
     path = ci_path("ddraw.ini")
     if not path.is_file():
         return
+    wanted = parse_ini_text(rpu_ddraw_text)
     ini = IniFile(path)
-    if ini.get("Misc", "BoostScriptDialogLimit") != "1":
-        ini.set("Misc", "BoostScriptDialogLimit", "1")
-        ini.save()
+    for (section, key), value in wanted.items():
+        if not section or not key:
+            continue
+        current = ini.get(section, key)
+        if current is None or current.lower() != value.lower():
+            ini.set(section, key, value)
+    ini.save()
 
 
 def install_rpu() -> None:
     """Download RPU's current release and extract its content (including the mods it
-    officially bundles - NPC Armor, Party Orders, Unofficial Patch settings). Raises on
-    any failure; never touches mods_order.txt beyond enabling rpu.dat itself."""
+    officially bundles - NPC Armor, Party Orders, Unofficial Patch settings), then merge
+    its recommended ddraw.ini settings into the existing one. Raises on any failure; never
+    touches mods_order.txt beyond enabling rpu.dat itself."""
     import tempfile
     import urllib.request
 
@@ -136,9 +152,13 @@ def install_rpu() -> None:
             shutil.copyfileobj(resp, out)
         with zipfile.ZipFile(downloaded) as zf:
             copied = 0
+            rpu_ddraw_text: str | None = None
             for info in zf.infolist():
                 parts = [p for p in info.filename.replace("\\", "/").split("/") if p]
                 if info.is_dir() or not parts:
+                    continue
+                if parts == ["ddraw.ini"]:
+                    rpu_ddraw_text = zf.read(info).decode("latin-1")
                     continue
                 dest = _wanted_dest(parts)
                 if dest is None:
@@ -150,7 +170,8 @@ def install_rpu() -> None:
             if not copied:
                 raise RuntimeError("RPU archive layout has changed - no recognized files found")
     enable_mod_file("rpu.dat")
-    _enable_boost_script_dialog_limit()
+    if rpu_ddraw_text is not None:
+        _apply_rpu_ddraw_settings(rpu_ddraw_text)
     save_rpu_state({"version": version})
 
 
