@@ -10,6 +10,8 @@ pub mod ini_file;
 pub mod keys;
 pub mod launch;
 pub mod launch_option;
+pub mod mod_catalog;
 pub mod paths;
 pub mod saves;
 pub mod schema;
+pub mod steam_shortcuts;

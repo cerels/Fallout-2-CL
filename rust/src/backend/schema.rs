@@ -234,8 +234,14 @@ const BUILTIN_SCHEMAS: &[(&str, &str)] = &[
     ("05-companions-highlights.toml", include_str!("../../../schemas/05-companions-highlights.toml")),
     ("06-audio.toml", include_str!("../../../schemas/06-audio.toml")),
     ("08-launcher.toml", include_str!("../../../schemas/08-launcher.toml")),
-    ("catalog.toml", include_str!("../../../schemas/catalog.toml")),
+    ("catalog.toml", CATALOG_TOML),
 ];
+
+/// Also the mod *download* catalog ([[entry]]s with a github/raw source) - see
+/// `mod_catalog.rs`, which re-parses this same embedded string for that unrelated purpose.
+/// It contributes no settings here: it has no `[files]`/`[[group]]`, so this file's pass
+/// through `load_catalog` below is a harmless no-op.
+pub(crate) const CATALOG_TOML: &str = include_str!("../../../schemas/catalog.toml");
 
 /// Reference schemas for popular mods, shipped inside this binary so they work even before
 /// the mod itself (and any `mods/<name>.schema.toml` it carries) is installed.
