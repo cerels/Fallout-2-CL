@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+toml = "0.8"
+regex = "1"
 
 [dev-dependencies]
 tempfile = "3"

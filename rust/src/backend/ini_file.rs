@@ -137,7 +137,7 @@ impl IniFile {
 /// Matches Python's `str.splitlines()` for the line endings that actually occur in these
 /// files (`\n` and `\r\n`): no trailing empty element when `raw` ends with a newline, and an
 /// empty string splits to no lines at all.
-fn split_lines(raw: &str) -> Vec<String> {
+pub(crate) fn split_lines(raw: &str) -> Vec<String> {
     if raw.is_empty() {
         return Vec::new();
     }
