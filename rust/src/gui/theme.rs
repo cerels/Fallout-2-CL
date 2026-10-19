@@ -1,19 +1,22 @@
 //! Pip-Boy-inspired visual theme: dark background, phosphor-green accents, amber as the
 //! "something needs attention" color - see `docs/adr/0004-rust-rewrite.md` ("modern layout
 //! and spacing, amber/green CRT accents kept subtle rather than kitschy"). Plain
-//! `egui::Visuals` field tweaks (plus one embedded font), no extra theme crate: the
+//! `egui::Visuals` field tweaks (plus two embedded font weights), no extra theme crate: the
 //! simplest thing that works (`docs/adr/0005-boring-rust.md`).
 
 use std::sync::Arc;
 
 use eframe::egui;
 
-/// Inter Regular (SIL Open Font License 1.1 - `assets/fonts/Inter-LICENSE.txt`), swapped in
-/// for egui's own default proportional font. Only the one static weight is embedded (not
-/// the full variable font or every static weight) to keep the binary small; `.strong()`
-/// text stays the same weight and leans on color/size instead, same as most of this app's
-/// text already did.
+/// Inter Regular and Bold (SIL Open Font License 1.1 - `assets/fonts/Inter-LICENSE.txt`),
+/// swapped in for egui's own default proportional font. Only these two static weights are
+/// embedded (not the full variable font or every static weight) to keep the binary small.
 const INTER_REGULAR: &[u8] = include_bytes!("../../assets/fonts/Inter-Regular.ttf");
+const INTER_BOLD: &[u8] = include_bytes!("../../assets/fonts/Inter-Bold.ttf");
+
+/// Name of the bold `FontFamily` registered in `build_fonts` - use `theme::bold()` to get a
+/// `RichText` in this family rather than naming it directly at call sites.
+const INTER_BOLD_FAMILY: &str = "Inter-Bold";
 
 pub const ACCENT: egui::Color32 = egui::Color32::from_rgb(0x5d, 0xfc, 0x8a);
 pub const AMBER: egui::Color32 = egui::Color32::from_rgb(0xff, 0xb8, 0x4d);
@@ -58,12 +61,33 @@ pub fn install(ctx: &egui::Context) {
 
 /// Put Inter ahead of egui's bundled default so every proportional-text widget picks it up
 /// automatically; the default stays right behind it as a fallback for any glyph Inter
-/// doesn't cover.
+/// doesn't cover. Inter Bold is registered as its own named family (`bold_family_id()`)
+/// rather than replacing `Proportional`, so regular text is unaffected and only call sites
+/// that ask for it (via `theme::bold()`) render bold.
 fn build_fonts() -> egui::FontDefinitions {
     let mut fonts = egui::FontDefinitions::default();
     fonts.font_data.insert("Inter".to_owned(), Arc::new(egui::FontData::from_static(INTER_REGULAR)));
+    fonts.font_data.insert("Inter-Bold".to_owned(), Arc::new(egui::FontData::from_static(INTER_BOLD)));
     fonts.families.entry(egui::FontFamily::Proportional).or_default().insert(0, "Inter".to_owned());
+    // Fall back to Inter Regular and then egui's default for any glyph Inter Bold doesn't
+    // cover, same fallback shape as the Proportional family above.
+    let proportional_fallbacks = fonts.families.get(&egui::FontFamily::Proportional).cloned().unwrap_or_default();
+    let mut bold_family = vec!["Inter-Bold".to_owned()];
+    bold_family.extend(proportional_fallbacks);
+    fonts.families.insert(bold_family_id(), bold_family);
     fonts
+}
+
+/// The `FontFamily` that renders in Inter Bold - see `bold()`.
+fn bold_family_id() -> egui::FontFamily {
+    egui::FontFamily::Name(INTER_BOLD_FAMILY.into())
+}
+
+/// A `RichText` in Inter Bold with the usual "strong" color baked in - the bold counterpart
+/// to calling `.strong()` directly, which (per egui) only changes color, not weight. Chain
+/// `.color()`/`.size()` afterward same as any other `RichText`.
+pub fn bold(text: impl AsRef<str>) -> egui::RichText {
+    egui::RichText::new(text.as_ref().to_string()).strong().family(bold_family_id())
 }
 
 fn build_visuals() -> egui::Visuals {
@@ -139,11 +163,5 @@ pub fn primary_button(text: impl Into<egui::WidgetText>, warn: bool) -> egui::Bu
     } else {
         (ACCENT, DARK_FG)
     };
-    egui::Button::new(
-        egui::RichText::new(text.into().text().to_string())
-            .color(fg)
-            .strong(),
-    )
-    .fill(bg)
-    .corner_radius(10.0)
+    egui::Button::new(bold(text.into().text()).color(fg)).fill(bg).corner_radius(10.0)
 }
