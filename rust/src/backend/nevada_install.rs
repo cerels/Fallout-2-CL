@@ -233,6 +233,36 @@ mod tests {
     }
 
     #[test]
+    fn extract_nevada_release_skips_a_classic_engine_file_at_any_depth() {
+        // Unlike Sonora's nested-platform-zip rule (which only fires at the top level),
+        // Nevada's skip list matches purely on basename - `rel.split("/")[-1].lower()` in
+        // Python - regardless of how deeply nested the file is.
+        let zip = build_zip(&[
+            ("Fallout Nevada/data/master.dat", b"master"),
+            ("Fallout Nevada/some/nested/folder/ddraw.dll", b"should still be skipped"),
+        ]);
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let root = nevada_root(&paths);
+        std::fs::create_dir_all(&root).unwrap();
+
+        extract_nevada_release(&zip, &paths, &root).unwrap();
+
+        assert!(!root.join("some").join("nested").join("folder").join("ddraw.dll").exists());
+    }
+
+    #[test]
+    fn extract_nevada_release_errors_when_every_file_is_skipped() {
+        let zip = build_zip(&[("Fallout Nevada/NEVADA_EV.exe", b"classic engine, superseded")]);
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let root = nevada_root(&paths);
+        std::fs::create_dir_all(&root).unwrap();
+        let err = extract_nevada_release(&zip, &paths, &root).unwrap_err();
+        assert!(err.contains("no recognized files found"));
+    }
+
+    #[test]
     fn install_nevada_renames_config_cfg_to_fallout2_cfg() {
         // Exercises just the rename step install_nevada performs after extraction, without
         // the network-dependent download/ce-install steps.
