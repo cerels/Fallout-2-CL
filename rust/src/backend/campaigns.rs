@@ -110,6 +110,7 @@ pub fn save_last_campaign_id(prefs: &mut IniFile, campaign_id: &str) -> io::Resu
 
 pub fn activate(paths: &Paths, campaign: &Campaign) {
     paths.set_campaign_root(campaign.root(paths));
+    paths.set_campaign_bin_names(campaign.bin_names);
 }
 
 #[cfg(test)]

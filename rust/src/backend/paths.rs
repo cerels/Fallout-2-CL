@@ -21,9 +21,16 @@ use std::rc::Rc;
 pub const PREVIEW_W: u32 = 224;
 pub const PREVIEW_H: u32 = 133;
 
+/// `game_bin()`'s default search names - Vanilla/CE's own engine binary. Every other
+/// campaign whose own `bin_names` includes these (Et Tu, Nevada - both built on fallout2-ce)
+/// still resolves correctly; only a campaign with its own distinct engine (Sonora's
+/// `fallout-fission`) needs `set_campaign_bin_names()` called with its own list.
+pub const CE_BIN_NAMES: &[&str] = &["fallout2-ce", "fallout2-ce.exe"];
+
 pub struct Paths {
     launcher_dir: PathBuf,
     active_root: RefCell<PathBuf>,
+    active_bin_names: RefCell<&'static [&'static str]>,
 }
 
 /// Shared handle to a `Paths`: cheap to clone, cheap to pass around - everything that needs
@@ -34,7 +41,7 @@ impl Paths {
     /// Vanilla/CE is active by default - `active_root` starts out equal to `launcher_dir`.
     pub fn new(launcher_dir: PathBuf) -> SharedPaths {
         let active_root = RefCell::new(launcher_dir.clone());
-        Rc::new(Paths { launcher_dir, active_root })
+        Rc::new(Paths { launcher_dir, active_root, active_bin_names: RefCell::new(CE_BIN_NAMES) })
     }
 
     /// Locate the real launcher directory from the running executable, for production use.
@@ -66,29 +73,42 @@ impl Paths {
         *self.active_root.borrow_mut() = root;
     }
 
-    /// Temporarily point `game_dir()` elsewhere - e.g. so an installer that's generic over
-    /// "the active campaign's root" can be pointed at a campaign other than the one
-    /// currently active, such as fetching a native engine binary into a freshly-installed
-    /// total conversion's own root. Restores the previous root when the returned guard is
-    /// dropped (including on an early return or panic) - this is the same shape as Python's
+    /// Which names `game_bin()` searches `game_dir()` for - defaults to `CE_BIN_NAMES`.
+    /// `campaigns::activate()` calls this together with `set_campaign_root()` whenever the
+    /// active campaign has its own distinct engine binary (Sonora's `fallout-fission`);
+    /// campaigns built on fallout2-ce (Et Tu, Nevada) never need to, since `CE_BIN_NAMES` is
+    /// already a subset of their own `bin_names`.
+    pub fn set_campaign_bin_names(&self, names: &'static [&'static str]) {
+        *self.active_bin_names.borrow_mut() = names;
+    }
+
+    /// Temporarily point `game_dir()` (and `game_bin()`'s search names, always back to CE's
+    /// own) elsewhere - e.g. so an installer that's generic over "the active campaign's root"
+    /// can be pointed at a campaign other than the one currently active, such as fetching
+    /// CE's native engine binary into a freshly-installed total conversion's own root.
+    /// Restores the previous root and bin names when the returned guard is dropped (including
+    /// on an early return or panic) - this is the same shape as Python's
     /// `@contextmanager campaign_root_override`.
     pub fn override_campaign_root(&self, root: PathBuf) -> CampaignRootOverride<'_> {
         let previous = self.game_dir();
+        let previous_bin_names = *self.active_bin_names.borrow();
         self.set_campaign_root(root);
-        CampaignRootOverride { paths: self, previous }
+        self.set_campaign_bin_names(CE_BIN_NAMES);
+        CampaignRootOverride { paths: self, previous, previous_bin_names }
     }
 
-    /// The active campaign's engine binary, if either known name exists; otherwise the
-    /// Linux name, so callers have something to report as missing.
+    /// The active campaign's engine binary, if any of `set_campaign_bin_names()`'s names
+    /// exist; otherwise the first such name, so callers have something to report as missing.
     pub fn game_bin(&self) -> PathBuf {
         let root = self.game_dir();
-        for name in ["fallout2-ce", "fallout2-ce.exe"] {
+        let names = *self.active_bin_names.borrow();
+        for name in names {
             let candidate = root.join(name);
             if candidate.is_file() {
                 return candidate;
             }
         }
-        root.join("fallout2-ce")
+        root.join(names.first().copied().unwrap_or("fallout2-ce"))
     }
 
     pub fn backup_dir(&self) -> PathBuf {
@@ -125,16 +145,18 @@ impl Paths {
     }
 }
 
-/// RAII guard returned by `Paths::override_campaign_root` - put the previous root back on
-/// drop.
+/// RAII guard returned by `Paths::override_campaign_root` - put the previous root and bin
+/// names back on drop.
 pub struct CampaignRootOverride<'a> {
     paths: &'a Paths,
     previous: PathBuf,
+    previous_bin_names: &'static [&'static str],
 }
 
 impl Drop for CampaignRootOverride<'_> {
     fn drop(&mut self) {
         self.paths.set_campaign_root(self.previous.clone());
+        self.paths.set_campaign_bin_names(self.previous_bin_names);
     }
 }
 
@@ -289,5 +311,35 @@ mod tests {
         std::fs::write(tmp.path().join("fallout2-ce.exe"), b"").unwrap();
         let paths = paths_in(tmp.path());
         assert_eq!(paths.game_bin(), tmp.path().join("fallout2-ce.exe"));
+    }
+
+    #[test]
+    fn game_bin_searches_the_active_campaigns_own_bin_names() {
+        // A campaign with its own distinct engine (Sonora's fallout-fission) is never found
+        // under CE's own binary names - game_bin() must search whatever
+        // set_campaign_bin_names() was last told, not a hardcoded fallout2-ce/.exe pair.
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("fallout-fission"), b"").unwrap();
+        let paths = paths_in(tmp.path());
+        assert_eq!(paths.game_bin(), tmp.path().join("fallout2-ce"), "still CE's names by default");
+
+        paths.set_campaign_bin_names(&["fallout-fission", "fallout-fission.exe"]);
+        assert_eq!(paths.game_bin(), tmp.path().join("fallout-fission"));
+    }
+
+    #[test]
+    fn override_campaign_root_restores_bin_names_on_drop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = paths_in(tmp.path());
+        paths.set_campaign_bin_names(&["fallout-fission", "fallout-fission.exe"]);
+
+        {
+            let _guard = paths.override_campaign_root(tmp.path().join("elsewhere"));
+            // Overridden root is always treated as CE while the guard is held.
+            assert_eq!(paths.game_bin().file_name().unwrap(), "fallout2-ce");
+        }
+
+        std::fs::write(tmp.path().join("fallout-fission"), b"").unwrap();
+        assert_eq!(paths.game_bin(), tmp.path().join("fallout-fission"));
     }
 }
