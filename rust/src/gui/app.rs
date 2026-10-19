@@ -41,10 +41,7 @@ pub(crate) struct PendingConfirm {
 
 /// One sidebar entry. `Settings` pages are looked up by name each frame rather than by index
 /// into `store.catalog.pages`, so a reload that changes the page set can't leave a stale
-/// index pointing at the wrong page. `SavesPlaceholder` is not a real feature - see
-/// `docs/adr/0008-terminal-skin-escalation.md`'s "Explicitly out of scope" - it's a disabled
-/// row in the UTIL group (see `nav_needs_attention`'s doc comment for why it has no `[LOCKED]`
-/// text) with a hover tooltip explaining why it's unavailable.
+/// index pointing at the wrong page.
 enum NavEntry {
     Play,
     Campaigns,
@@ -52,7 +49,6 @@ enum NavEntry {
     Rpu,
     Mods,
     Launcher,
-    SavesPlaceholder,
 }
 
 /// Which group of the Left Nav Dock an entry belongs to - see `docs/terminal-ui-blueprint.md`
@@ -74,7 +70,6 @@ impl NavEntry {
             NavEntry::Rpu => "rpu".to_string(),
             NavEntry::Mods => "mods".to_string(),
             NavEntry::Launcher => "launcher".to_string(),
-            NavEntry::SavesPlaceholder => "saves".to_string(),
         }
     }
 
@@ -86,7 +81,6 @@ impl NavEntry {
             NavEntry::Rpu => "Restoration Project",
             NavEntry::Mods => "Mods",
             NavEntry::Launcher => "Launcher",
-            NavEntry::SavesPlaceholder => "Saves",
         }
     }
 
@@ -94,7 +88,7 @@ impl NavEntry {
         match self {
             NavEntry::Play | NavEntry::Campaigns => NavTier::Primary,
             NavEntry::Settings(_) => NavTier::Config,
-            NavEntry::Rpu | NavEntry::Mods | NavEntry::Launcher | NavEntry::SavesPlaceholder => NavTier::Util,
+            NavEntry::Rpu | NavEntry::Mods | NavEntry::Launcher => NavTier::Util,
         }
     }
 }
@@ -114,7 +108,6 @@ fn build_nav(catalog: &Catalog, campaign: &Campaign) -> Vec<NavEntry> {
     }
     nav.push(NavEntry::Mods);
     nav.push(NavEntry::Launcher);
-    nav.push(NavEntry::SavesPlaceholder);
     nav
 }
 
@@ -500,7 +493,6 @@ impl App {
                         }
                         shown_tier = Some(tier);
 
-                        let locked = matches!(self.nav[i], NavEntry::SavesPlaceholder);
                         let needs_attention = self.nav_needs_attention(i);
                         let base_label = match &self.nav[i] {
                             NavEntry::Settings(name) => {
@@ -527,11 +519,9 @@ impl App {
                                 .map(|p| pages::settings::count_matches(&p.groups, &search)).unwrap_or(0);
                             hits == 0
                         });
-                        let enabled = !locked && (search.is_empty() || !hits_zero);
+                        let enabled = search.is_empty() || !hits_zero;
                         ui.add_enabled_ui(enabled, |ui| {
-                            let response = ui.selectable_label(self.current == i, text);
-                            let response = if locked { response.on_disabled_hover_text("Not available yet") } else { response };
-                            if response.clicked() {
+                            if ui.selectable_label(self.current == i, text).clicked() {
                                 self.current = i;
                             }
                         });

@@ -40,6 +40,7 @@ unaffected.
   (`eframe::NativeOptions` has no `.with_decorations(false)`); a "window controls" row in the
   status bar would mean a frameless window plus hand-rolled drag/minimize/close regions - a
   separate, much larger decision this ADR doesn't make.
-- **A real Save Backups feature.** It shows up in the wireframe as a disabled placeholder tab
-  only; no backup functionality exists in `backend::saves` today (it only reads saves for the
-  Play page's thumbnail picker), and building it is a separate feature decision.
+- **A real Save Backups feature.** It appeared in `docs/terminal-ui-blueprint.md`'s wireframe
+  as an illustrative disabled placeholder tab, since removed from the nav entirely - no backup
+  functionality exists in `backend::saves` today (it only reads saves for the Play page's
+  thumbnail picker), and building it is a separate feature decision.
