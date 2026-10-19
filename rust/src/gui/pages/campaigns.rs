@@ -172,7 +172,10 @@ fn start_install(app: &mut App, campaign: &'static Campaign) {
     let installer = install_fn(campaign.id);
     app.jobs.spawn(campaign.id, move |report| {
         let paths = crate::gui::jobs::fresh_paths(target);
-        JobOutcome::CampaignInstall(target.id, installer(&paths, report))
+        let result = installer(&paths, report).inspect(|()| {
+            crate::backend::shared_settings::seed_new_campaign(&paths, &target);
+        });
+        JobOutcome::CampaignInstall(target.id, result)
     });
 }
 

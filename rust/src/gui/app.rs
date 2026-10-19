@@ -320,7 +320,13 @@ impl App {
                 self.ce_installing = true;
                 self.job_stages.insert("ce".to_string(), "Downloading\u{2026}".to_string());
                 let ce = *by_id("ce").expect("\"ce\" is a registered campaign");
-                self.jobs.spawn("ce", move |report| JobOutcome::CeInstall(install_ce(&fresh_paths(ce), report)));
+                self.jobs.spawn("ce", move |report| {
+                    let paths = fresh_paths(ce);
+                    let result = install_ce(&paths, report).inspect(|()| {
+                        crate::backend::shared_settings::seed_new_campaign(&paths, &ce);
+                    });
+                    JobOutcome::CeInstall(result)
+                });
             }
             ConfirmAction::AddCampaignToSteam(campaign) => pages::campaigns::add_to_steam_now(self, campaign),
             ConfirmAction::UninstallRpu => {

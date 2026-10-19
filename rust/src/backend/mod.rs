@@ -19,5 +19,6 @@ pub mod rpu_install;
 pub mod paths;
 pub mod saves;
 pub mod schema;
+pub mod shared_settings;
 pub mod sonora_install;
 pub mod steam_shortcuts;
