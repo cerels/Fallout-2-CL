@@ -91,7 +91,7 @@ impl PlayPage {
                     match &selected {
                         Some(save) => {
                             ui.label(theme::bold(&save.name).size(16.0).color(theme::STRONG_TEXT));
-                            ui.label(egui::RichText::new(&save.location).color(theme::ACCENT));
+                            ui.label(egui::RichText::new(&save.location).color(theme::accent(ui)));
                             if !save.description.is_empty() {
                                 ui.label(
                                     egui::RichText::new(format!("\u{201c}{}\u{201d}", save.description))
@@ -176,7 +176,7 @@ fn save_card(
 ) -> egui::Response {
     let width = PREVIEW_W as f32 + 24.0;
     let fill = if selected { egui::Color32::from_rgb(0x17, 0x26, 0x1a) } else { egui::Color32::from_rgb(0x0f, 0x17, 0x11) };
-    let stroke_color = if selected { theme::ACCENT } else { egui::Color32::from_rgb(0x1f, 0x33, 0x24) };
+    let stroke_color = if selected { theme::accent(ui) } else { egui::Color32::from_rgb(0x1f, 0x33, 0x24) };
 
     let frame = egui::Frame::default()
         .fill(fill)
@@ -200,7 +200,7 @@ fn save_card(
             } else {
                 format!("{} \u{2014} {}", save.location, save.description)
             };
-            ui.label(egui::RichText::new(loc).color(theme::ACCENT).small());
+            ui.label(egui::RichText::new(loc).color(theme::accent(ui)).small());
             ui.label(
                 egui::RichText::new(format!("{} \u{b7} saved {}", save.game_date, time_ago(save.mtime)))
                     .color(theme::MUTED)

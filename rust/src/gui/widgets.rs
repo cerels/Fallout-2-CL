@@ -20,7 +20,7 @@ pub fn card(ui: &mut egui::Ui, title: &str, add_contents: impl FnOnce(&mut egui:
         .corner_radius(14.0)
         .inner_margin(egui::Margin { left: 16, right: 16, top: 12, bottom: 12 })
         .show(ui, |ui| {
-            ui.label(theme::bold(title.to_uppercase()).color(theme::ACCENT).size(12.5));
+            ui.label(theme::mono_bold(title.to_uppercase()).color(theme::accent(ui)).size(12.5));
             ui.add_space(6.0);
             add_contents(ui);
         });
@@ -50,7 +50,7 @@ pub fn toggle_switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
     if ui.is_rect_visible(rect) {
         let t = ui.ctx().animate_bool(response.id, *on);
         let off_color = egui::Color32::from_rgb(0x2a, 0x3a, 0x2e);
-        let track = off_color.lerp_to_gamma(theme::ACCENT, t);
+        let track = off_color.lerp_to_gamma(theme::accent(ui), t);
         let radius = rect.height() / 2.0;
         ui.painter().rect_filled(rect, radius, track);
         let knob_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), t);
