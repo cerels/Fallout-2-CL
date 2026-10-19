@@ -4,6 +4,9 @@
 //! Each module here is a 1:1 behavioral port of its Python counterpart of the same name;
 //! only the implementation idioms change to fit Rust.
 
+pub mod campaigns;
+pub mod dat;
 pub mod ini_file;
 pub mod keys;
+pub mod launch_option;
 pub mod paths;
