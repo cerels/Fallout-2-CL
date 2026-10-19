@@ -179,6 +179,28 @@ mod tests {
     }
 
     #[test]
+    fn forced_campaign_id_takes_the_first_flag_when_repeated() {
+        let argv = vec!["--campaign=ettu".to_string(), "--campaign=nevada".to_string()];
+        assert_eq!(forced_campaign_id(&argv), Some("ettu".to_string()));
+    }
+
+    #[test]
+    fn forced_campaign_id_with_empty_value_is_empty_string_not_none() {
+        // Matches Python's `arg.split("=", 1)[1]`: a bare "--campaign=" still produces a
+        // (empty) value, it's not treated as "no flag at all".
+        let argv = vec!["--campaign=".to_string()];
+        assert_eq!(forced_campaign_id(&argv), Some(String::new()));
+    }
+
+    #[test]
+    fn active_campaign_falls_back_to_default_for_an_unrecognized_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        paths.set_campaign_root(tmp.path().join("SomeUnrelatedFolder"));
+        assert_eq!(active_campaign(&paths).id, DEFAULT_ID);
+    }
+
+    #[test]
     fn last_campaign_id_round_trips_through_prefs() {
         let tmp = tempfile::tempdir().unwrap();
         let ini_path = tmp.path().join("launcher.ini");

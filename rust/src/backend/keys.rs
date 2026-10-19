@@ -125,6 +125,23 @@ mod tests {
     }
 
     #[test]
+    fn three_part_combo_keeps_original_order() {
+        // Reversal only happens for exactly 2 parts ("modifier first"); with 3+ parts the
+        // split order is kept as-is, matching Python's `if len(parts) == 2: parts.reverse()`.
+        assert_eq!(dik_label("30+42+56"), "A + Left Shift + Left Alt");
+    }
+
+    #[test]
+    fn empty_string_passes_through_unchanged() {
+        assert_eq!(dik_label(""), "");
+    }
+
+    #[test]
+    fn whitespace_around_parts_is_trimmed() {
+        assert_eq!(dik_label(" 30 + 42 "), "Left Shift + A");
+    }
+
+    #[test]
     fn evdev_extended_keys_map_to_dik() {
         assert_eq!(evdev_to_dik(103), Some(200)); // Up
         assert_eq!(evdev_to_dik(1), None);
