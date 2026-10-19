@@ -207,6 +207,9 @@ pub fn extract_fallout1_data(paths: &Paths, master_dat: &Path) -> Result<(), Str
                      with a different layout than this launcher expects."
             .to_string());
     }
+    // The release zip doesn't reliably preserve the Unix exec bit, same as the engine
+    // binaries the other installers drop in - see `ce_install::make_executable`.
+    super::ce_install::make_executable(&script).map_err(|e| e.to_string())?;
 
     let output = run_with_timeout(
         &script,
