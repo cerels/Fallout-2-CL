@@ -90,6 +90,25 @@ mod tests {
     }
 
     #[test]
+    fn slot_mode_with_slot_zero_is_not_treated_as_absent() {
+        // slot 0 is a legitimate save slot - `Option::Some(0)`, not "no slot given".
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        assert_eq!(game_args(&paths, "slot", Some(0)), vec!["--dev-load-game=0"]);
+    }
+
+    #[test]
+    fn continue_mode_picks_the_most_recently_modified_save_among_several() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        write_minimal_save(&paths, 1);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        write_minimal_save(&paths, 5);
+
+        assert_eq!(game_args(&paths, "continue", None), vec!["--dev-load-game=5"]);
+    }
+
+    #[test]
     fn continue_mode_with_no_saves_is_empty() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());

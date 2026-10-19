@@ -320,6 +320,98 @@ mod tests {
     }
 
     #[test]
+    fn saves_are_sorted_most_recently_modified_first() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let bytes = build_save_bytes("Hero", "", (1, 1, 2241), "DEN", true);
+        write_save(tmp.path(), "slot0", &bytes);
+        // Ensure a distinguishable mtime: most filesystems have coarser-than-microsecond
+        // resolution, so a short real sleep (not a loop-driving one) is the simplest
+        // reliable way to get slot1 to land strictly after slot0 on disk.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        write_save(tmp.path(), "slot1", &bytes);
+
+        let saves = read_saves(&paths);
+        assert_eq!(saves.len(), 2);
+        assert_eq!(saves[0].slot, 1, "the most recently written save should sort first");
+        assert_eq!(saves[1].slot, 0);
+    }
+
+    #[test]
+    fn slot_number_rejects_non_digit_suffix() {
+        assert_eq!(slot_number("slot7a"), None);
+        assert_eq!(slot_number("slot"), None);
+        assert_eq!(slot_number("slot007"), Some(7));
+    }
+
+    #[test]
+    fn partial_thumbnail_data_is_treated_as_no_thumbnail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let mut bytes = build_save_bytes("Hero", "", (1, 1, 2241), "DEN", false);
+        // Half a thumbnail's worth of trailing bytes - more than the bare header, but not
+        // the full PREVIEW_W*PREVIEW_H the format expects.
+        bytes.extend(vec![0x11u8; (PREVIEW_W * PREVIEW_H / 2) as usize]);
+        write_save(tmp.path(), "slot0", &bytes);
+
+        assert_eq!(read_saves(&paths)[0].thumbnail, None);
+    }
+
+    #[test]
+    fn extra_trailing_bytes_past_a_full_thumbnail_are_ignored() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let mut bytes = build_save_bytes("Hero", "", (1, 1, 2241), "DEN", true);
+        bytes.extend(vec![0xAAu8; 50]); // garbage past the expected file length
+        write_save(tmp.path(), "slot0", &bytes);
+
+        let saves = read_saves(&paths);
+        assert_eq!(saves[0].thumbnail.as_ref().unwrap().len(), (PREVIEW_W * PREVIEW_H) as usize);
+    }
+
+    #[test]
+    fn name_field_with_no_null_terminator_is_read_in_full() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        // The name field is 32 bytes (29..61); fill it completely so there's no \0 inside.
+        let bytes = build_save_bytes("12345678901234567890123456789012", "", (1, 1, 2241), "DEN", true);
+        write_save(tmp.path(), "slot0", &bytes);
+
+        assert_eq!(read_saves(&paths)[0].name, "12345678901234567890123456789012");
+    }
+
+    #[test]
+    fn load_palette_returns_none_when_color_pal_entry_is_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let dat_path = tmp.path().join("master.dat");
+        // A well-formed DAT2 archive with a zero-entry directory - "color.pal" simply isn't
+        // in it.
+        let mut tree = Vec::new();
+        tree.extend_from_slice(&0u32.to_le_bytes()); // entry count
+        let dat_size = (tree.len() + 8) as u32;
+        let mut archive = tree.clone();
+        archive.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+        archive.extend_from_slice(&dat_size.to_le_bytes());
+        std::fs::write(&dat_path, archive).unwrap();
+
+        let cache = DatCache::new();
+        assert_eq!(load_palette(&paths, &cache), None);
+    }
+
+    #[test]
+    fn load_palette_returns_none_when_color_pal_is_too_short() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let dat_path = tmp.path().join("master.dat");
+        let short_pal = vec![10u8; 30]; // well under the 768 bytes a full palette needs
+        std::fs::write(&dat_path, build_test_dat_with_color_pal(&short_pal)).unwrap();
+
+        let cache = DatCache::new();
+        assert_eq!(load_palette(&paths, &cache), None);
+    }
+
+    #[test]
     fn load_palette_scales_vga_values_to_8_bit() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());

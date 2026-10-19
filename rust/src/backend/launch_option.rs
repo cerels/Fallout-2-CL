@@ -66,4 +66,18 @@ mod tests {
         let (line, _) = format_launch_option(Path::new("/game/f2launcher"), Some("ettu"), false);
         assert_eq!(line, "\"/game/f2launcher\" --campaign=ettu # %command%");
     }
+
+    #[test]
+    fn force_campaign_on_windows_line_is_still_unverified() {
+        let (line, verified) =
+            format_launch_option(Path::new(r"C:\game\f2launcher.exe"), Some("ettu"), true);
+        assert_eq!(line, "\"C:\\game\\f2launcher.exe\" --campaign=ettu %command%");
+        assert!(!verified);
+    }
+
+    #[test]
+    fn no_force_campaign_omits_the_flag_entirely() {
+        let (line, _) = format_launch_option(Path::new("/game/f2launcher"), None, false);
+        assert!(!line.contains("--campaign"));
+    }
 }
