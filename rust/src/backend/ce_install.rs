@@ -177,10 +177,11 @@ fn extract_members(
 
 /// Download and place the fallout2-ce binary + ce.dat in the active campaign's root. Never
 /// touches any existing vanilla files - only adds the CE engine files.
-pub fn install_ce(paths: &Paths) -> Result<(), String> {
+pub fn install_ce(paths: &Paths, on_stage: &dyn Fn(&str)) -> Result<(), String> {
     let asset = asset_for_platform()?;
     let (url, filename, published_at) = resolve_ce_download()?;
     let bytes = super::http::get_bytes(&url, Duration::from_secs(120))?;
+    on_stage("Installing\u{2026}");
 
     let wanted: HashSet<&str> = [asset.bin_name, "ce.dat"].into_iter().collect();
     let members = extract_members(&bytes, asset.kind, &wanted)?;

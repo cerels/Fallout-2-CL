@@ -222,10 +222,11 @@ fn extract_sonora_release(archive_bytes: &[u8], paths: &Paths, root: &Path) -> R
 
 /// Download Sonora's release, extract the game (skipping dev/platform-bundle extras), then
 /// fetch a native engine binary from `FISSION_REPO`.
-pub fn install_sonora(paths: &Paths) -> Result<(), String> {
+pub fn install_sonora(paths: &Paths, on_stage: &dyn Fn(&str)) -> Result<(), String> {
     let root = sonora_root(paths);
     let (url, _filename, version) = resolve_sonora_download()?;
     let bytes = super::http::get_bytes(&url, Duration::from_secs(600))?;
+    on_stage("Installing\u{2026}");
 
     extract_sonora_release(&bytes, paths, &root)?;
     fetch_fission_binary(&root)?;

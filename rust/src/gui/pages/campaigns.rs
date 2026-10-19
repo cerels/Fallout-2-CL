@@ -34,7 +34,7 @@ fn description(id: &str) -> &'static str {
     }
 }
 
-fn install_fn(id: &'static str) -> fn(&crate::backend::paths::Paths) -> Result<(), String> {
+fn install_fn(id: &'static str) -> fn(&crate::backend::paths::Paths, &dyn Fn(&str)) -> Result<(), String> {
     match id {
         "ce" => ce_install::install_ce,
         "ettu" => ettu_install::install_ettu,
@@ -83,8 +83,9 @@ fn campaign_card(app: &mut App, ui: &mut egui::Ui, campaign: &'static Campaign) 
 
         ui.horizontal(|ui| {
             if !is_installed {
-                let label = busy.clone().unwrap_or_else(|| "Install".to_string());
-                if ui.add_enabled(busy.is_none(), egui::Button::new(label)).clicked() {
+                if busy.is_some() {
+                    crate::gui::widgets::busy_status(ui, app.job_stages.get(campaign.id).map(String::as_str));
+                } else if ui.button("Install").clicked() {
                     start_install(app, campaign);
                 }
             }
@@ -114,7 +115,9 @@ fn campaign_card(app: &mut App, ui: &mut egui::Ui, campaign: &'static Campaign) 
                     browse_for_fallout1_master_dat(app);
                 }
                 let extracting = app.campaigns_busy.get("ettu-f1").is_some();
-                if ui.add_enabled(!extracting, egui::Button::new(if extracting { "Extracting\u{2026}" } else { "Extract" })).clicked() {
+                if extracting {
+                    crate::gui::widgets::busy_status(ui, app.job_stages.get("ettu-f1").map(String::as_str));
+                } else if ui.button("Extract").clicked() {
                     start_fallout1_extract(app);
                 }
             });
@@ -164,11 +167,12 @@ fn campaign_card(app: &mut App, ui: &mut egui::Ui, campaign: &'static Campaign) 
 
 fn start_install(app: &mut App, campaign: &'static Campaign) {
     app.campaigns_busy.insert(campaign.id, "Installing\u{2026}".to_string());
+    app.job_stages.insert(campaign.id.to_string(), "Downloading\u{2026}".to_string());
     let target = *campaign;
     let installer = install_fn(campaign.id);
-    app.jobs.spawn(move || {
+    app.jobs.spawn(campaign.id, move |report| {
         let paths = crate::gui::jobs::fresh_paths(target);
-        JobOutcome::CampaignInstall(target.id, installer(&paths))
+        JobOutcome::CampaignInstall(target.id, installer(&paths, report))
     });
 }
 
@@ -237,7 +241,8 @@ fn start_fallout1_extract(app: &mut App) {
     let master_dat = std::path::PathBuf::from(app.fallout1_path.trim());
     let target = *crate::backend::campaigns::by_id("ettu").expect("\"ettu\" is a registered campaign");
     app.campaigns_busy.insert("ettu-f1", "Extracting\u{2026}".to_string());
-    app.jobs.spawn(move || {
+    app.job_stages.insert("ettu-f1".to_string(), "Extracting\u{2026}".to_string());
+    app.jobs.spawn("ettu-f1", move |_report| {
         let paths = crate::gui::jobs::fresh_paths(target);
         JobOutcome::Fallout1Extract(ettu_install::extract_fallout1_data(&paths, &master_dat))
     });

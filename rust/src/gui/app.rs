@@ -103,6 +103,10 @@ pub struct App {
     pub(crate) search: String,
     pub(crate) capturing_key: Option<String>,
     pub(crate) jobs: Jobs,
+    /// Live status text for in-flight jobs, keyed the same way as `campaigns_busy`/`mods.busy`
+    /// (a campaign id, a mod id, "rpu") - see `Jobs::spawn` and
+    /// `docs/adr/0006-indeterminate-download-progress.md`.
+    pub(crate) job_stages: HashMap<String, String>,
     pub(crate) play: PlayPage,
     pub(crate) mods: ModsPage,
     pub(crate) campaigns_busy: HashMap<&'static str, String>,
@@ -142,6 +146,7 @@ impl App {
             search: String::new(),
             capturing_key: None,
             jobs: Jobs::new(),
+            job_stages: HashMap::new(),
             play,
             mods,
             campaigns_busy: HashMap::new(),
@@ -292,8 +297,9 @@ impl App {
         match action {
             ConfirmAction::InstallCeThenPlay => {
                 self.ce_installing = true;
+                self.job_stages.insert("ce".to_string(), "Downloading\u{2026}".to_string());
                 let ce = *by_id("ce").expect("\"ce\" is a registered campaign");
-                self.jobs.spawn(move || JobOutcome::CeInstall(install_ce(&fresh_paths(ce))));
+                self.jobs.spawn("ce", move |report| JobOutcome::CeInstall(install_ce(&fresh_paths(ce), report)));
             }
             ConfirmAction::AddCampaignToSteam(campaign) => pages::campaigns::add_to_steam_now(self, campaign),
             ConfirmAction::UninstallRpu => {
@@ -310,6 +316,7 @@ impl App {
         match outcome {
             JobOutcome::CeInstall(result) => {
                 self.ce_installing = false;
+                self.job_stages.remove("ce");
                 match result {
                     Ok(()) => {
                         self.info_dialog = Some((
@@ -322,6 +329,7 @@ impl App {
             }
             JobOutcome::CampaignInstall(id, result) => {
                 self.campaigns_busy.remove(id);
+                self.job_stages.remove(id);
                 if let Err(e) = result {
                     let name = by_id(id).map(|c| c.name).unwrap_or(id);
                     self.error_dialog = Some(("Install failed".to_string(), format!("{name}: {e}")));
@@ -329,6 +337,7 @@ impl App {
             }
             JobOutcome::Fallout1Extract(result) => {
                 self.campaigns_busy.remove("ettu-f1");
+                self.job_stages.remove("ettu-f1");
                 match result {
                     Ok(()) => {
                         self.info_dialog = Some((
@@ -341,6 +350,7 @@ impl App {
             }
             JobOutcome::RpuInstall(result) => {
                 self.rpu_busy = false;
+                self.job_stages.remove("rpu");
                 match result {
                     Ok(()) => self.needs_reload = true,
                     Err(e) => self.error_dialog = Some(("Install failed".to_string(), format!("Restoration Project: {e}"))),
@@ -348,6 +358,7 @@ impl App {
             }
             JobOutcome::RpuUpdateCheck(version) => {
                 self.rpu_busy = false;
+                self.job_stages.remove("rpu");
                 match version {
                     Some(v) => self.rpu_pending_update = Some(v),
                     None => self.info_dialog = Some(("Restoration Project".to_string(), "Already up to date.".to_string())),
@@ -366,6 +377,9 @@ impl eframe::App for App {
     fn ui(&mut self, root_ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = root_ui.ctx().clone();
 
+        for (key, stage) in self.jobs.poll_stages() {
+            self.job_stages.insert(key, stage);
+        }
         for outcome in self.jobs.poll() {
             self.handle_job_outcome(outcome);
         }

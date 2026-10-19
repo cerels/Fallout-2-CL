@@ -226,9 +226,10 @@ fn decode_latin1(bytes: &[u8]) -> String {
 /// Download RPU's current release and extract its content (including the mods it officially
 /// bundles), then merge its recommended ddraw.ini settings into the existing one. Never
 /// touches mods_order.txt beyond enabling rpu.dat itself.
-pub fn install_rpu(paths: &Paths) -> Result<(), String> {
+pub fn install_rpu(paths: &Paths, on_stage: &dyn Fn(&str)) -> Result<(), String> {
     let (url, _filename, version) = resolve_rpu_download()?;
     let bytes = super::http::get_bytes(&url, Duration::from_secs(600))?;
+    on_stage("Installing\u{2026}");
 
     let (rpu_ddraw_text, mods_files) = extract_rpu_release(&bytes, paths)?;
     enable_mod_file(paths, "rpu.dat").map_err(|e| e.to_string())?;

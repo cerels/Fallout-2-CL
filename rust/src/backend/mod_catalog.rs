@@ -173,10 +173,12 @@ pub fn check_for_update(paths: &Paths, entry: &CatalogEntry) -> Option<String> {
     }
 }
 
-/// Download `entry`'s file and place it under `mods/`.
-pub fn install_catalog_entry(paths: &Paths, entry: &CatalogEntry) -> Result<(), String> {
+/// Download `entry`'s file and place it under `mods/`. `on_stage` is called once the download
+/// finishes and installing begins - see `docs/adr/0006-indeterminate-download-progress.md`.
+pub fn install_catalog_entry(paths: &Paths, entry: &CatalogEntry, on_stage: &dyn Fn(&str)) -> Result<(), String> {
     let resolved = resolve_download(entry)?;
     let bytes = super::http::get_bytes(&resolved.url, std::time::Duration::from_secs(60))?;
+    on_stage("Installing\u{2026}");
 
     let mods_dir = paths.ci_path("mods", None);
     std::fs::create_dir_all(&mods_dir).map_err(|e| e.to_string())?;

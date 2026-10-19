@@ -26,6 +26,17 @@ pub fn card(ui: &mut egui::Ui, title: &str, add_contents: impl FnOnce(&mut egui:
         });
 }
 
+/// A small spinner followed by `stage` (or a generic "Working…" when the job hasn't reported
+/// a specific stage yet) - the inline "something's happening" indicator for a download/install
+/// job, drawn in place of its triggering button (see
+/// `docs/adr/0006-indeterminate-download-progress.md`).
+pub fn busy_status(ui: &mut egui::Ui, stage: Option<&str>) {
+    ui.horizontal(|ui| {
+        ui.add(egui::Spinner::new().size(14.0));
+        ui.label(egui::RichText::new(stage.unwrap_or("Working\u{2026}")).color(theme::MUTED));
+    });
+}
+
 /// A small on/off switch, standing in for the old Qt build's animated `Toggle` - the
 /// textbook egui "toggle switch" shape (a sliding knob on a pill-shaped track), themed with
 /// the Pip-Boy accent color when on.

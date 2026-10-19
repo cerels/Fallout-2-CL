@@ -40,20 +40,34 @@ pub enum JobOutcome {
 pub struct Jobs {
     tx: Sender<JobOutcome>,
     rx: Receiver<JobOutcome>,
+    stage_tx: Sender<(String, String)>,
+    stage_rx: Receiver<(String, String)>,
     in_flight: u32,
 }
 
 impl Jobs {
     pub fn new() -> Self {
         let (tx, rx) = channel();
-        Jobs { tx, rx, in_flight: 0 }
+        let (stage_tx, stage_rx) = channel();
+        Jobs { tx, rx, stage_tx, stage_rx, in_flight: 0 }
     }
 
-    pub fn spawn(&mut self, work: impl FnOnce() -> JobOutcome + Send + 'static) {
+    /// Spawn a background job identified by `key` (a mod id, "rpu", a campaign id, ...) -
+    /// `work` gets a `report` callback it can call mid-job to post a short status
+    /// ("Downloading…", "Installing…") that the UI shows inline on whatever row/button
+    /// started it (see `App::job_stages`, `docs/adr/0006-indeterminate-download-progress.md`).
+    /// A job that has only one stage can just ignore the callback - the UI already shows
+    /// *something's* happening from the moment the caller marks the key busy.
+    pub fn spawn(&mut self, key: impl Into<String>, work: impl FnOnce(&dyn Fn(&str)) -> JobOutcome + Send + 'static) {
         self.in_flight += 1;
         let tx = self.tx.clone();
+        let stage_tx = self.stage_tx.clone();
+        let key = key.into();
         std::thread::spawn(move || {
-            let _ = tx.send(work());
+            let report = move |stage: &str| {
+                let _ = stage_tx.send((key.clone(), stage.to_string()));
+            };
+            let _ = tx.send(work(&report));
         });
     }
 
@@ -67,6 +81,15 @@ impl Jobs {
         while let Ok(outcome) = self.rx.try_recv() {
             self.in_flight = self.in_flight.saturating_sub(1);
             out.push(outcome);
+        }
+        out
+    }
+
+    /// Drain whatever (job key, stage text) reports have arrived since the last poll.
+    pub fn poll_stages(&mut self) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        while let Ok(msg) = self.stage_rx.try_recv() {
+            out.push(msg);
         }
         out
     }

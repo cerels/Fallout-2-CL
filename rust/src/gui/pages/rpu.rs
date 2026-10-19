@@ -48,17 +48,19 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 crate::gui::open::open(RPU_HOMEPAGE);
             }
             let busy = app.rpu_busy;
-            let action_text = if busy {
-                "Working\u{2026}".to_string()
-            } else if !installed {
-                "Install".to_string()
-            } else if let Some(v) = &app.rpu_pending_update {
-                format!("Update to {v}")
+            if busy {
+                crate::gui::widgets::busy_status(ui, app.job_stages.get("rpu").map(String::as_str));
             } else {
-                "Check for updates".to_string()
-            };
-            if ui.add_enabled(!busy, egui::Button::new(action_text)).clicked() {
-                on_action(app, installed);
+                let action_text = if !installed {
+                    "Install".to_string()
+                } else if let Some(v) = &app.rpu_pending_update {
+                    format!("Update to {v}")
+                } else {
+                    "Check for updates".to_string()
+                };
+                if ui.button(action_text).clicked() {
+                    on_action(app, installed);
+                }
             }
             if installed && ui.add_enabled(!busy, egui::Button::new("Uninstall")).clicked() {
                 app.pending_confirm = Some(PendingConfirm {
@@ -141,8 +143,12 @@ fn on_action(app: &mut App, installed: bool) {
     let ce = *crate::backend::campaigns::by_id("ce").expect("\"ce\" is a registered campaign");
     app.rpu_busy = true;
     if !installed || app.rpu_pending_update.take().is_some() {
-        app.jobs.spawn(move || crate::gui::jobs::JobOutcome::RpuInstall(install_rpu(&fresh_paths(ce))));
+        app.job_stages.insert("rpu".to_string(), "Downloading\u{2026}".to_string());
+        app.jobs.spawn("rpu", move |report| crate::gui::jobs::JobOutcome::RpuInstall(install_rpu(&fresh_paths(ce), report)));
     } else {
-        app.jobs.spawn(move || crate::gui::jobs::JobOutcome::RpuUpdateCheck(check_for_rpu_update(&fresh_paths(ce))));
+        app.job_stages.insert("rpu".to_string(), "Working\u{2026}".to_string());
+        app.jobs.spawn("rpu", move |_report| {
+            crate::gui::jobs::JobOutcome::RpuUpdateCheck(check_for_rpu_update(&fresh_paths(ce)))
+        });
     }
 }

@@ -109,10 +109,11 @@ fn top_level_folders(bytes: &[u8]) -> Result<HashSet<String>, String> {
 /// Download Et Tu's release and extract it whole into its own subfolder, then (Linux only
 /// for now, same scope as CE itself) fetch a native engine binary into that same folder,
 /// since the release only ships Windows ones.
-pub fn install_ettu(paths: &Paths) -> Result<(), String> {
+pub fn install_ettu(paths: &Paths, on_stage: &dyn Fn(&str)) -> Result<(), String> {
     let campaign = campaign();
     let (url, _filename, version) = resolve_ettu_download()?;
     let bytes = super::http::get_bytes(&url, Duration::from_secs(600))?;
+    on_stage("Installing\u{2026}");
 
     let top_level = top_level_folders(&bytes)?;
     let expected: HashSet<String> = [campaign.subdir.to_string()].into_iter().collect();
@@ -131,7 +132,7 @@ pub fn install_ettu(paths: &Paths) -> Result<(), String> {
 
     if cfg!(target_os = "linux") {
         let _guard = paths.override_campaign_root(ettu_root(paths));
-        super::ce_install::install_ce(paths)?;
+        super::ce_install::install_ce(paths, on_stage)?;
     }
     // Windows: the release's own fallout2-ce.exe/Fallout2.exe already run natively.
     // macOS: not automated yet, same as CE's own install (no native build fetched here).

@@ -214,7 +214,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         for entry in app.mod_catalog.iter().filter(|e| e.is_installed(&app.paths) && e.github.is_some()) {
             let entry = entry.clone();
             let id = entry.id.clone();
-            app.jobs.spawn(move || {
+            app.jobs.spawn(id.clone(), move |_report| {
                 let paths = crate::gui::jobs::fresh_paths(campaign);
                 JobOutcome::ModUpdateCheck(id, check_for_update(&paths, &entry))
             });
@@ -281,23 +281,24 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let busy = app.mods.busy.contains(&row.dat.to_lowercase());
+                    if busy {
+                        let stage = row.entry.as_ref().and_then(|e| app.job_stages.get(&e.id)).map(String::as_str);
+                        crate::gui::widgets::busy_status(ui, stage);
+                        return;
+                    }
                     if row.installed {
-                        if ui.add_enabled(!busy, egui::Button::new("Delete")).clicked() {
+                        if ui.button("Delete").clicked() {
                             app.confirm_delete_mod(row.clone());
                         }
                     }
                     if let Some(entry) = &row.entry {
                         if row.installed {
                             if let Some(version) = app.mods.pending_updates.get(&entry.id).cloned() {
-                                if ui.add_enabled(!busy, egui::Button::new(format!("Update ({version})"))).clicked()
-                                {
+                                if ui.button(format!("Update ({version})")).clicked() {
                                     start_download(app, entry.clone());
                                 }
                             }
-                        } else if ui
-                            .add_enabled(!busy, egui::Button::new(if busy { "Downloading\u{2026}" } else { "Download" }))
-                            .clicked()
-                        {
+                        } else if ui.button("Download").clicked() {
                             start_download(app, entry.clone());
                         }
                         if ui.button("Open source").clicked() {
@@ -337,11 +338,12 @@ fn move_row(app: &mut App, delta: i32) {
 
 fn start_download(app: &mut App, entry: CatalogEntry) {
     app.mods.busy.insert(entry.dat[0].to_lowercase());
+    app.job_stages.insert(entry.id.clone(), "Downloading\u{2026}".to_string());
     let campaign = *app.campaign;
     let entry_for_job = entry.clone();
-    app.jobs.spawn(move || {
+    app.jobs.spawn(entry.id.clone(), move |report| {
         let paths = crate::gui::jobs::fresh_paths(campaign);
-        let result = install_catalog_entry(&paths, &entry_for_job);
+        let result = install_catalog_entry(&paths, &entry_for_job, report);
         JobOutcome::ModInstall(entry_for_job.id.clone(), result)
     });
 }
@@ -357,6 +359,7 @@ impl App {
         if let Some(entry) = self.mod_catalog.iter().find(|e| e.id == entry_id) {
             self.mods.busy.remove(&entry.dat[0].to_lowercase());
         }
+        self.job_stages.remove(&entry_id);
         match result {
             Ok(()) => {
                 self.mods.pending_updates.remove(&entry_id);

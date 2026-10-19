@@ -130,10 +130,11 @@ fn extract_nevada_release(archive_bytes: &[u8], paths: &Paths, root: &Path) -> R
 /// Download Nevada's release and extract it into its own campaign root (skipping the
 /// classic Windows-only engine bits), rename its config.cfg to fallout2.cfg, then fetch a
 /// native fallout2-ce engine binary the same way as every other campaign.
-pub fn install_nevada(paths: &Paths) -> Result<(), String> {
+pub fn install_nevada(paths: &Paths, on_stage: &dyn Fn(&str)) -> Result<(), String> {
     let root = nevada_root(paths);
     let (url, _filename, version) = resolve_nevada_download()?;
     let bytes = super::http::get_bytes(&url, Duration::from_secs(600))?;
+    on_stage("Installing\u{2026}");
 
     extract_nevada_release(&bytes, paths, &root)?;
 
@@ -144,7 +145,7 @@ pub fn install_nevada(paths: &Paths) -> Result<(), String> {
 
     if cfg!(any(target_os = "linux", target_os = "windows")) {
         let _guard = paths.override_campaign_root(root.clone());
-        super::ce_install::install_ce(paths)?;
+        super::ce_install::install_ce(paths, on_stage)?;
     }
     // macOS: not automated yet, same as CE's own install.
 
