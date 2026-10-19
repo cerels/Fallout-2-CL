@@ -4,7 +4,9 @@
 //! immediate-mode, so every page just re-reads `Store::value` fresh each frame.
 
 use std::collections::HashMap;
+use std::path::Path;
 
+use crate::backend::campaigns;
 use crate::backend::dat::{parse_ini_text, DatCache};
 use crate::backend::ini_file::IniFile;
 use crate::backend::paths::SharedPaths;
@@ -191,12 +193,92 @@ impl Store {
                 f.save().map_err(|e| e.to_string())?;
             }
         }
+
+        let shared_dirty: Vec<(Setting, String)> = dirty
+            .iter()
+            .filter_map(|sid| {
+                let s = self.settings.get(sid)?;
+                s.shared.then(|| (s.clone(), self.current[sid].clone()))
+            })
+            .collect();
+        if !shared_dirty.is_empty() {
+            sync_shared_settings(&self.catalog, paths, &shared_dirty);
+        }
+
         for sid in dirty {
             let value = self.current[&sid].clone();
             self.initial.insert(sid, value);
         }
         Ok(())
     }
+}
+
+/// Mirrors every shared setting's new value into each other installed, same-format
+/// campaign's own config (see `docs/adr/0003-shared-settings-sync-on-save.md`). Best-effort:
+/// a sibling is skipped - not an error, not a failed save - if it has no config file to sync
+/// into yet, or if writing to it fails; the active campaign's own settings already saved
+/// successfully by this point.
+fn sync_shared_settings(catalog: &Catalog, paths: &SharedPaths, shared_dirty: &[(Setting, String)]) {
+    let active = campaigns::active_campaign(paths);
+    let siblings: Vec<&campaigns::Campaign> =
+        campaigns::installed_shareable_campaigns(paths).into_iter().filter(|c| c.id != active.id).collect();
+    if siblings.is_empty() {
+        return;
+    }
+    let stamp = timestamp_now();
+    for sibling in siblings {
+        let root = sibling.root(paths);
+        if let Err(e) = sync_into_campaign(catalog, paths, shared_dirty, &root, &stamp) {
+            eprintln!("shared settings: couldn't sync into {}: {e}", sibling.name);
+        }
+    }
+}
+
+/// One sibling campaign's half of `sync_shared_settings`: write every shared value into its
+/// own config file, grouped by file so a file with several changed settings is opened and
+/// saved once. Returns early (not an error) for a file the sibling doesn't have yet.
+fn sync_into_campaign(
+    catalog: &Catalog,
+    paths: &SharedPaths,
+    shared_dirty: &[(Setting, String)],
+    root: &Path,
+    stamp: &str,
+) -> Result<(), String> {
+    let mut by_file: HashMap<&str, Vec<&(Setting, String)>> = HashMap::new();
+    for entry in shared_dirty {
+        by_file.entry(entry.0.file.as_str()).or_default().push(entry);
+    }
+
+    for (file_id, entries) in by_file {
+        let Some(rel) = catalog.files.get(file_id) else { continue };
+        let path = paths.ci_path(rel, Some(root));
+        if !path.is_file() {
+            continue;
+        }
+        let mut f = IniFile::open(path.clone()).map_err(|e| e.to_string())?;
+        for (s, value) in &entries {
+            if s.kind == "resolution" {
+                if let Some((kx, ky)) = s.key.split_once('|') {
+                    if let Some((x, y)) = value.to_lowercase().split_once('x') {
+                        f.set(&s.section, kx, x);
+                        f.set(&s.section, ky, y);
+                    }
+                }
+            } else {
+                f.set(&s.section, &s.key, value);
+            }
+        }
+
+        let backup_dest = root.join("backup").join("launcher").join(stamp).join(rel);
+        if !backup_dest.exists() {
+            if let Some(parent) = backup_dest.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            std::fs::copy(&path, &backup_dest).map_err(|e| e.to_string())?;
+        }
+        f.save().map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 fn decode_latin1(bytes: &[u8]) -> String {
@@ -239,6 +321,97 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::schema::load_catalog;
+
+    /// A CE root (the temp dir itself, active by default) with a Nevada sibling - both with
+    /// their own `fallout2.cfg` already in place, the way an installed campaign would.
+    fn ce_with_nevada_sibling() -> (tempfile::TempDir, SharedPaths) {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("fallout2-ce"), b"").unwrap();
+        std::fs::write(tmp.path().join("fallout2.cfg"), "[sound]\nmaster_volume=100\n").unwrap();
+        std::fs::create_dir_all(tmp.path().join("Nevada")).unwrap();
+        std::fs::write(tmp.path().join("Nevada").join("fallout2-ce"), b"").unwrap();
+        std::fs::write(
+            tmp.path().join("Nevada").join("fallout2.cfg"),
+            "[sound]\nmaster_volume=100\n",
+        )
+        .unwrap();
+        let paths = crate::backend::paths::Paths::new(tmp.path().to_path_buf());
+        (tmp, paths)
+    }
+
+    #[test]
+    fn save_syncs_a_shared_setting_into_an_installed_sibling_campaign() {
+        let (tmp, paths) = ce_with_nevada_sibling();
+        let mut store = Store::new(&paths, load_catalog(&paths));
+
+        store.set("cfg:sound:master_volume", "500");
+        store.save(&paths).unwrap();
+
+        let nevada_cfg = std::fs::read_to_string(tmp.path().join("Nevada").join("fallout2.cfg")).unwrap();
+        assert!(nevada_cfg.contains("master_volume=500"), "{nevada_cfg}");
+    }
+
+    #[test]
+    fn save_backs_up_the_siblings_previous_config_before_overwriting_it() {
+        let (tmp, paths) = ce_with_nevada_sibling();
+        let mut store = Store::new(&paths, load_catalog(&paths));
+
+        store.set("cfg:sound:master_volume", "500");
+        store.save(&paths).unwrap();
+
+        let backup_root = tmp.path().join("Nevada").join("backup").join("launcher");
+        let stamps: Vec<_> = std::fs::read_dir(&backup_root).unwrap().flatten().collect();
+        assert_eq!(stamps.len(), 1, "expected exactly one backup folder under {backup_root:?}");
+        let backed_up = std::fs::read_to_string(stamps[0].path().join("fallout2.cfg")).unwrap();
+        assert!(backed_up.contains("master_volume=100"), "backup should hold the pre-sync value: {backed_up}");
+    }
+
+    #[test]
+    fn save_does_not_sync_a_setting_that_is_not_marked_shared() {
+        let (tmp, paths) = ce_with_nevada_sibling();
+        let mut store = Store::new(&paths, load_catalog(&paths));
+
+        // game_difficulty (03-gameplay.toml) is deliberately not shared.
+        store.set("cfg:preferences:game_difficulty", "2");
+        store.save(&paths).unwrap();
+
+        let nevada_cfg = std::fs::read_to_string(tmp.path().join("Nevada").join("fallout2.cfg")).unwrap();
+        assert!(!nevada_cfg.contains("game_difficulty"), "{nevada_cfg}");
+    }
+
+    #[test]
+    fn save_skips_a_sibling_with_no_config_file_yet_rather_than_creating_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("fallout2-ce"), b"").unwrap();
+        std::fs::write(tmp.path().join("fallout2.cfg"), "[sound]\nmaster_volume=100\n").unwrap();
+        // Nevada is "installed" (its binary exists) but has never had its config written.
+        std::fs::create_dir_all(tmp.path().join("Nevada")).unwrap();
+        std::fs::write(tmp.path().join("Nevada").join("fallout2-ce"), b"").unwrap();
+        let paths = crate::backend::paths::Paths::new(tmp.path().to_path_buf());
+        let mut store = Store::new(&paths, load_catalog(&paths));
+
+        store.set("cfg:sound:master_volume", "500");
+        store.save(&paths).unwrap();
+
+        assert!(!tmp.path().join("Nevada").join("fallout2.cfg").exists());
+    }
+
+    #[test]
+    fn save_reports_success_even_when_a_sibling_sync_would_fail() {
+        let (tmp, paths) = ce_with_nevada_sibling();
+        // Replace Nevada's config with a directory of the same name, so opening it as a
+        // file errors - this must not turn into a failed save for the active campaign.
+        std::fs::remove_file(tmp.path().join("Nevada").join("fallout2.cfg")).unwrap();
+        std::fs::create_dir_all(tmp.path().join("Nevada").join("fallout2.cfg")).unwrap();
+        let mut store = Store::new(&paths, load_catalog(&paths));
+
+        store.set("cfg:sound:master_volume", "500");
+        assert!(store.save(&paths).is_ok());
+
+        let ce_cfg = std::fs::read_to_string(tmp.path().join("fallout2.cfg")).unwrap();
+        assert!(ce_cfg.contains("master_volume=500"), "active campaign's own save must still succeed");
+    }
 
     #[test]
     fn civil_from_days_matches_known_dates() {
