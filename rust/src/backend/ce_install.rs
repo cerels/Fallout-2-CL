@@ -326,6 +326,75 @@ mod tests {
     }
 
     #[test]
+    fn extract_members_ignores_a_matching_name_at_the_wrong_depth() {
+        // Only "<top-level-dir>/<name>" (exactly 2 path components) counts - a file
+        // sitting deeper (or with no wrapping directory at all) must not match, even if
+        // its basename is one of the wanted names.
+        let archive = build_tar_gz(&[
+            ("fallout2-ce", b"should not match: no wrapping directory"),
+            ("fallout2-ce-linux-x64/nested/fallout2-ce", b"should not match: too deep"),
+            ("fallout2-ce-linux-x64/ce.dat", b"this one matches"),
+        ]);
+        let wanted: HashSet<&str> = ["fallout2-ce", "ce.dat"].into_iter().collect();
+        let members = extract_members(&archive, ArchiveKind::Tar, &wanted).unwrap();
+        assert_eq!(members.len(), 1);
+        assert_eq!(members["ce.dat"], b"this one matches");
+    }
+
+    #[test]
+    fn extract_members_returns_only_what_it_actually_found() {
+        // install_ce()'s own "Release archive is missing: ..." error is computed from
+        // comparing `wanted` against this map's keys, so it's important that a partial
+        // match doesn't silently fabricate an entry for the missing file.
+        let archive = build_tar_gz(&[("fallout2-ce-linux-x64/fallout2-ce", b"binary bytes")]);
+        let wanted: HashSet<&str> = ["fallout2-ce", "ce.dat"].into_iter().collect();
+        let members = extract_members(&archive, ArchiveKind::Tar, &wanted).unwrap();
+        assert_eq!(members.len(), 1);
+        assert!(!members.contains_key("ce.dat"));
+    }
+
+    #[test]
+    fn extract_members_skips_a_directory_entry_even_if_it_matches_a_wanted_zip_name() {
+        let mut buf = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let opts = zip::write::SimpleFileOptions::default();
+            // A directory entry named exactly like a wanted file - must not be read as if
+            // it were file content.
+            writer.add_directory("fallout2-ce-windows-x64/ce.dat/", opts).unwrap();
+            writer.finish().unwrap();
+        }
+        let wanted: HashSet<&str> = ["ce.dat"].into_iter().collect();
+        let members = extract_members(&buf, ArchiveKind::Zip, &wanted).unwrap();
+        assert!(members.is_empty());
+    }
+
+    #[test]
+    fn asset_for_platform_errors_clearly_when_this_platform_has_no_build() {
+        // CeAsset isn't Debug (no production code changes to add it just for a test), so
+        // match explicitly rather than unwrap_err().
+        match asset_for_platform() {
+            Err(e) => assert!(e.contains("No Fallout 2 CE build available")),
+            Ok(_) => assert!(os_has_any_build(), "got an asset on an OS with no build table entry"),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn make_executable_sets_the_executable_bits() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("fallout2-ce");
+        std::fs::write(&path, b"binary").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        make_executable(&path).unwrap();
+
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o111, 0o111);
+    }
+
+    #[test]
     fn ce_state_round_trips() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());
