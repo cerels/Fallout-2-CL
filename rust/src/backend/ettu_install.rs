@@ -318,6 +318,66 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
+    fn mark_ettu_installed(paths: &Paths) {
+        std::fs::create_dir_all(ettu_root(paths)).unwrap();
+        std::fs::write(ettu_root(paths).join("fallout2-ce"), b"x").unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn extract_fallout1_data_fails_cleanly_when_undat_script_is_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        mark_ettu_installed(&paths);
+
+        let err = extract_fallout1_data(&paths, Path::new("/fake/MASTER.DAT")).unwrap_err();
+        assert!(err.contains("undat.sh not found"));
+    }
+
+    #[cfg(unix)]
+    fn write_undat_script(paths: &Paths, body: &str) {
+        let script = ettu_root(paths).join("undat.sh");
+        std::fs::write(&script, format!("#!/bin/sh\n{body}\n")).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn extract_fallout1_data_succeeds_runs_the_script_and_preserves_other_state() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        mark_ettu_installed(&paths);
+        write_undat_script(&paths, "exit 0");
+
+        // A pre-existing "version" key must survive the merge-on-save in
+        // extract_fallout1_data, exactly like Python's `{**load_ettu_state(), ...}`.
+        let mut state = load_ettu_state(&paths);
+        state.insert("version".to_string(), serde_json::Value::String("v9.9".to_string()));
+        save_ettu_state(&paths, &state).unwrap();
+
+        assert!(!has_fallout1_data(&paths));
+        extract_fallout1_data(&paths, Path::new("/fake/MASTER.DAT")).unwrap();
+
+        assert!(has_fallout1_data(&paths));
+        let reloaded = load_ettu_state(&paths);
+        assert_eq!(reloaded.get("version").and_then(|v| v.as_str()), Some("v9.9"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn extract_fallout1_data_surfaces_the_scripts_own_error_output() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        mark_ettu_installed(&paths);
+        write_undat_script(&paths, "echo 'MASTER.DAT not found' >&2; exit 1");
+
+        let err = extract_fallout1_data(&paths, Path::new("/fake/MASTER.DAT")).unwrap_err();
+        assert_eq!(err, "MASTER.DAT not found");
+        assert!(!has_fallout1_data(&paths));
+    }
+
     #[test]
     #[cfg(unix)]
     fn run_with_timeout_captures_output_and_exit_status() {
