@@ -24,6 +24,11 @@ pub struct Campaign {
     pub badge: &'static str,
     /// Badge color (hex).
     pub accent: &'static str,
+    /// Whether this campaign's config uses the same file/section/key format as Vanilla/CE
+    /// (see GLOSSARY.md's "Shareable campaign" and `docs/adr/0003-shared-settings-sync-on-save.md`),
+    /// so a `Setting::shared` value can sync straight into it. False only for Sonora, whose
+    /// FISSION fork uses an unrelated config format with no equivalent keys.
+    pub shareable: bool,
 }
 
 impl Campaign {
@@ -49,6 +54,7 @@ pub const CAMPAIGNS: &[Campaign] = &[
         bin_names: &["fallout2-ce", "fallout2-ce.exe"],
         badge: "F2",
         accent: "#5dfc8a",
+        shareable: true,
     },
     Campaign {
         id: "ettu",
@@ -57,6 +63,7 @@ pub const CAMPAIGNS: &[Campaign] = &[
         bin_names: &["fallout2-ce", "fallout2-ce.exe", "Fallout2.exe"],
         badge: "ET",
         accent: "#5d9dfc",
+        shareable: true,
     },
     Campaign {
         id: "sonora",
@@ -65,6 +72,7 @@ pub const CAMPAIGNS: &[Campaign] = &[
         bin_names: &["fallout-fission", "fallout-fission.exe"],
         badge: "SO",
         accent: "#ffb84d",
+        shareable: false,
     },
     Campaign {
         id: "nevada",
@@ -73,6 +81,7 @@ pub const CAMPAIGNS: &[Campaign] = &[
         bin_names: &["fallout2-ce", "fallout2-ce.exe"],
         badge: "NV",
         accent: "#ff7a5d",
+        shareable: true,
     },
 ];
 
@@ -82,6 +91,24 @@ pub fn by_id(campaign_id: &str) -> Option<&'static Campaign> {
 
 pub fn installed_campaigns(paths: &Paths) -> Vec<&'static Campaign> {
     CAMPAIGNS.iter().filter(|c| c.is_installed(paths)).collect()
+}
+
+/// Installed campaigns that share Vanilla/CE's config format, in `CAMPAIGNS` order - the
+/// set a `Setting::shared` value can sync across. See `Campaign::shareable`.
+pub fn installed_shareable_campaigns(paths: &Paths) -> Vec<&'static Campaign> {
+    installed_campaigns(paths).into_iter().filter(|c| c.shareable).collect()
+}
+
+/// Which already-installed shareable campaign a freshly-installed one should seed its
+/// shared settings from: Vanilla/CE if it's installed, else the first installed shareable
+/// campaign in `CAMPAIGNS` order. `None` if `new_campaign` is the only one installed so far.
+pub fn shared_settings_seed_source(
+    paths: &Paths,
+    new_campaign: &Campaign,
+) -> Option<&'static Campaign> {
+    let candidates: Vec<&'static Campaign> =
+        installed_shareable_campaigns(paths).into_iter().filter(|c| c.id != new_campaign.id).collect();
+    candidates.iter().find(|c| c.id == DEFAULT_ID).or_else(|| candidates.first()).copied()
 }
 
 pub fn active_campaign(paths: &Paths) -> &'static Campaign {
@@ -199,6 +226,60 @@ mod tests {
         let paths = Paths::new(tmp.path().to_path_buf());
         paths.set_campaign_root(tmp.path().join("SomeUnrelatedFolder"));
         assert_eq!(active_campaign(&paths).id, DEFAULT_ID);
+    }
+
+    #[test]
+    fn only_sonora_is_not_shareable() {
+        for c in CAMPAIGNS {
+            assert_eq!(c.shareable, c.id != "sonora", "{}", c.id);
+        }
+    }
+
+    #[test]
+    fn installed_shareable_campaigns_excludes_sonora_even_when_installed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::write(tmp.path().join("fallout2-ce"), b"").unwrap();
+        std::fs::create_dir_all(tmp.path().join("Sonora")).unwrap();
+        std::fs::write(tmp.path().join("Sonora").join("fallout-fission"), b"").unwrap();
+
+        let ids: Vec<_> = installed_shareable_campaigns(&paths).iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec!["ce"]);
+    }
+
+    #[test]
+    fn seed_source_prefers_ce_when_installed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::write(tmp.path().join("fallout2-ce"), b"").unwrap();
+        std::fs::create_dir_all(tmp.path().join("Nevada")).unwrap();
+        std::fs::write(tmp.path().join("Nevada").join("fallout2-ce"), b"").unwrap();
+
+        let source = shared_settings_seed_source(&paths, by_id("nevada").unwrap());
+        assert_eq!(source.map(|c| c.id), Some("ce"));
+    }
+
+    #[test]
+    fn seed_source_falls_back_to_first_installed_shareable_campaign_when_ce_is_not_installed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("Fallout1in2")).unwrap();
+        std::fs::write(tmp.path().join("Fallout1in2").join("fallout2-ce"), b"").unwrap();
+        std::fs::create_dir_all(tmp.path().join("Nevada")).unwrap();
+        std::fs::write(tmp.path().join("Nevada").join("fallout2-ce"), b"").unwrap();
+
+        let source = shared_settings_seed_source(&paths, by_id("nevada").unwrap());
+        assert_eq!(source.map(|c| c.id), Some("ettu"));
+    }
+
+    #[test]
+    fn seed_source_is_none_when_no_other_shareable_campaign_is_installed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::write(tmp.path().join("fallout2-ce"), b"").unwrap();
+
+        let source = shared_settings_seed_source(&paths, by_id("ce").unwrap());
+        assert!(source.is_none());
     }
 
     #[test]
