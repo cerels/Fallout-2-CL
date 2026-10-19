@@ -41,7 +41,9 @@ pub(crate) struct PendingConfirm {
 
 /// One sidebar entry. `Settings` pages are looked up by name each frame rather than by index
 /// into `store.catalog.pages`, so a reload that changes the page set can't leave a stale
-/// index pointing at the wrong page.
+/// index pointing at the wrong page. `SavesPlaceholder` is not a real feature - see
+/// `docs/adr/0008-terminal-skin-escalation.md`'s "Explicitly out of scope" - it only exists so
+/// the UTIL group has the `[LOCKED]` row the terminal-skin wireframe calls for.
 enum NavEntry {
     Play,
     Campaigns,
@@ -49,6 +51,17 @@ enum NavEntry {
     Rpu,
     Mods,
     Launcher,
+    SavesPlaceholder,
+}
+
+/// Which group of the Left Nav Dock an entry belongs to - see `docs/terminal-ui-blueprint.md`
+/// \u{a7}3 ("Vertical distribution"). `Primary` entries get no divider/group label; `Config`
+/// and `Util` each get one.
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum NavTier {
+    Primary,
+    Config,
+    Util,
 }
 
 impl NavEntry {
@@ -60,6 +73,7 @@ impl NavEntry {
             NavEntry::Rpu => "rpu".to_string(),
             NavEntry::Mods => "mods".to_string(),
             NavEntry::Launcher => "launcher".to_string(),
+            NavEntry::SavesPlaceholder => "saves".to_string(),
         }
     }
 
@@ -71,6 +85,34 @@ impl NavEntry {
             NavEntry::Rpu => "Restoration Project",
             NavEntry::Mods => "Mods",
             NavEntry::Launcher => "Launcher",
+            NavEntry::SavesPlaceholder => "Saves",
+        }
+    }
+
+    fn tier(&self) -> NavTier {
+        match self {
+            NavEntry::Play | NavEntry::Campaigns => NavTier::Primary,
+            NavEntry::Settings(_) => NavTier::Config,
+            NavEntry::Rpu | NavEntry::Mods | NavEntry::Launcher | NavEntry::SavesPlaceholder => NavTier::Util,
+        }
+    }
+
+    /// The bracket-sigil tag this row shows before its label - see
+    /// `docs/terminal-ui-blueprint.md` \u{a7}3 ("Bracket-sigil rules"). Settings pages fall
+    /// back to the generic `CFG` for any schema-driven page name this lookup doesn't
+    /// recognize.
+    fn tag(&self) -> &'static str {
+        match self {
+            NavEntry::Play | NavEntry::Campaigns | NavEntry::Launcher => "SYS",
+            NavEntry::Rpu => "RPU",
+            NavEntry::Mods => "MOD",
+            NavEntry::SavesPlaceholder => "LOCKED",
+            NavEntry::Settings(name) => match name.as_str() {
+                "Display" => "GFX",
+                "Audio" => "AUD",
+                "Controls" => "KEY",
+                _ => "CFG",
+            },
         }
     }
 }
@@ -90,6 +132,7 @@ fn build_nav(catalog: &Catalog, campaign: &Campaign) -> Vec<NavEntry> {
     }
     nav.push(NavEntry::Mods);
     nav.push(NavEntry::Launcher);
+    nav.push(NavEntry::SavesPlaceholder);
     nav
 }
 
@@ -201,13 +244,16 @@ impl App {
         Ok(())
     }
 
-    pub(crate) fn switch_campaign(&mut self, campaign: &'static Campaign) {
+    pub(crate) fn switch_campaign(&mut self, ctx: &egui::Context, campaign: &'static Campaign) {
         self.save_all_best_effort();
         activate(&self.paths, campaign);
         if let Ok(mut prefs) = launcher_prefs(&self.paths) {
             let _ = save_last_campaign_id(&mut prefs, campaign.id);
         }
         self.campaign = campaign;
+        // Re-tint the whole chrome to this campaign's accent - see
+        // `docs/terminal-ui-blueprint.md` \u{a7}1 and `theme::install`'s doc comment.
+        theme::install(ctx, theme::parse_hex(campaign.accent));
         self.rebuild_everything();
     }
 
@@ -391,6 +437,7 @@ impl eframe::App for App {
             ctx.request_repaint_after(std::time::Duration::from_millis(150));
         }
 
+        self.draw_status_bar(root_ui);
         self.draw_nav(root_ui);
         self.draw_bottom_bar(root_ui);
         egui::CentralPanel::default().show(root_ui, |ui| {
@@ -408,72 +455,150 @@ impl eframe::App for App {
 }
 
 impl App {
-    fn draw_nav(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::left("nav").resizable(false).exact_size(250.0).show(ui, |ui| {
-            ui.add_space(8.0);
-            self.draw_campaign_switcher(ui);
-            ui.add_space(8.0);
-            ui.add(
-                egui::TextEdit::singleline(&mut self.search).hint_text("Search settings\u{2026}").desired_width(f32::INFINITY),
-            );
-            ui.add_space(6.0);
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                let search = self.search.trim().to_lowercase();
-                for i in 0..self.nav.len() {
-                    let label = match &self.nav[i] {
-                        NavEntry::Settings(name) => {
-                            let hits = self
-                                .store
-                                .catalog
-                                .pages
-                                .iter()
-                                .find(|p| &p.name == name)
-                                .map(|p| pages::settings::count_matches(&p.groups, &search))
-                                .unwrap_or(0);
-                            if search.is_empty() {
-                                name.clone()
-                            } else {
-                                format!("{name}  ({hits})")
+    /// Session metadata: campaign-independent, so it lives in its own top panel rather than
+    /// sharing the bottom bar with LAUNCH (`docs/terminal-ui-blueprint.md` \u{a7}2/\u{a7}4).
+    fn draw_status_bar(&mut self, ui: &mut egui::Ui) {
+        egui::Panel::top("status_bar")
+            .exact_size(40.0)
+            .frame(egui::Frame::default().fill(theme::bg_panel()).inner_margin(egui::Margin::symmetric(14, 0)))
+            .show(ui, |ui| {
+                ui.horizontal_centered(|ui| {
+                    let dirty = self.dirty_count();
+                    if dirty > 0 {
+                        ui.label(
+                            theme::mono_bold(format!("\u{25cf} {dirty} UNSAVED"))
+                                .color(theme::AMBER),
+                        );
+                        if ui.button(theme::mono("[ SAVE ]")).clicked() {
+                            if let Err(e) = self.save_all() {
+                                self.error_dialog = Some(("Couldn't save settings".to_string(), e));
                             }
                         }
-                        other => other.label().to_string(),
-                    };
-                    let enabled = search.is_empty() || !matches!(&self.nav[i], NavEntry::Settings(name) if {
-                        let hits = self.store.catalog.pages.iter().find(|p| &p.name == name)
-                            .map(|p| pages::settings::count_matches(&p.groups, &search)).unwrap_or(0);
-                        hits == 0
-                    });
-                    ui.add_enabled_ui(enabled, |ui| {
-                        if ui.selectable_label(self.current == i, label).clicked() {
-                            self.current = i;
+                        if ui.button(theme::mono("[ DISCARD ]")).clicked() {
+                            self.store.revert();
+                            self.mods.revert(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info, self.campaign.id == "ce");
                         }
+                    } else {
+                        ui.label(theme::mono("ALL SAVED").color(theme::MUTED));
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(theme::mono(format!("BUILD {}", env!("CARGO_PKG_VERSION"))).color(theme::MUTED));
                     });
-                }
+                });
             });
-        });
+    }
+
+    fn draw_nav(&mut self, ui: &mut egui::Ui) {
+        let accent = theme::parse_hex(self.campaign.accent);
+        egui::Panel::left("nav")
+            .resizable(false)
+            .exact_size(250.0)
+            .frame(egui::Frame::default().fill(theme::bg_panel()).stroke(egui::Stroke::new(2.0, accent)).inner_margin(egui::Margin::same(8)))
+            .show(ui, |ui| {
+                ui.add_space(8.0);
+                self.draw_campaign_switcher(ui);
+                ui.add_space(8.0);
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.search).hint_text("> search\u{2026}").font(egui::TextStyle::Monospace).desired_width(f32::INFINITY),
+                );
+                ui.add_space(6.0);
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    let search = self.search.trim().to_lowercase();
+                    let mut shown_tier: Option<NavTier> = None;
+                    for i in 0..self.nav.len() {
+                        let tier = self.nav[i].tier();
+                        if shown_tier.as_ref() != Some(&tier) && tier != NavTier::Primary {
+                            ui.add_space(10.0);
+                            ui.label(theme::mono(match tier {
+                                NavTier::Config => "CONFIG",
+                                NavTier::Util => "UTIL",
+                                NavTier::Primary => unreachable!(),
+                            }).color(theme::MUTED).small());
+                            ui.separator();
+                        }
+                        shown_tier = Some(tier);
+
+                        let locked = matches!(self.nav[i], NavEntry::SavesPlaceholder);
+                        let (tag, tag_color) = self.nav_tag(i);
+                        let base_label = match &self.nav[i] {
+                            NavEntry::Settings(name) => {
+                                let hits = self
+                                    .store
+                                    .catalog
+                                    .pages
+                                    .iter()
+                                    .find(|p| &p.name == name)
+                                    .map(|p| pages::settings::count_matches(&p.groups, &search))
+                                    .unwrap_or(0);
+                                if search.is_empty() {
+                                    name.clone()
+                                } else {
+                                    format!("{name}  ({hits})")
+                                }
+                            }
+                            other => other.label().to_string(),
+                        };
+                        let label = format!("[{tag}] {}", base_label.to_uppercase());
+                        let text = match tag_color {
+                            Some(c) => theme::mono(label).color(c),
+                            None => theme::mono(label),
+                        };
+                        let hits_zero = matches!(&self.nav[i], NavEntry::Settings(name) if {
+                            let hits = self.store.catalog.pages.iter().find(|p| &p.name == name)
+                                .map(|p| pages::settings::count_matches(&p.groups, &search)).unwrap_or(0);
+                            hits == 0
+                        });
+                        let enabled = !locked && (search.is_empty() || !hits_zero);
+                        ui.add_enabled_ui(enabled, |ui| {
+                            if ui.selectable_label(self.current == i, text).clicked() {
+                                self.current = i;
+                            }
+                        });
+                    }
+                });
+            });
+    }
+
+    /// The `[TAG]` sigil and, when the row needs a color override, what color - `[!]`
+    /// (warning) overrides the entry's normal tag when it needs attention, `[LOCKED]` for the
+    /// Saves placeholder (dim; redundant with its disabled styling, but explicit is cheap),
+    /// and the normal `NavEntry::tag()` with no override otherwise - letting the row's label
+    /// render in the ordinary text color instead of forcing every row dim.
+    /// See `docs/terminal-ui-blueprint.md` \u{a7}3.
+    fn nav_tag(&self, i: usize) -> (String, Option<egui::Color32>) {
+        match &self.nav[i] {
+            NavEntry::SavesPlaceholder => ("LOCKED".to_string(), Some(theme::MUTED)),
+            NavEntry::Play if self.campaign.id == "ce" && needs_ce_install(&self.paths) => {
+                ("!".to_string(), Some(theme::AMBER))
+            }
+            NavEntry::Play if self.campaign.id != "ce" && !self.campaign.is_installed(&self.paths) => {
+                ("!".to_string(), Some(theme::AMBER))
+            }
+            NavEntry::Rpu if self.rpu_pending_update.is_some() => ("!".to_string(), Some(theme::AMBER)),
+            other => (other.tag().to_string(), None),
+        }
     }
 
     fn draw_campaign_switcher(&mut self, ui: &mut egui::Ui) {
         let campaign = self.campaign;
         ui.horizontal(|ui| {
             let accent = theme::parse_hex(campaign.accent);
-            egui::Frame::default().fill(accent).corner_radius(9.0).inner_margin(egui::Margin { left: 6, right: 6, top: 4, bottom: 4 }).show(ui, |ui| {
-                ui.label(theme::bold(campaign.badge).color(egui::Color32::from_rgb(0x06, 0x21, 0x0f)));
-            });
-            ui.menu_button(format!("{}  \u{25be}", campaign.name.to_uppercase()), |ui| {
+            ui.label(theme::mono_bold(format!("[{}]", campaign.badge)).color(accent));
+            ui.menu_button(theme::mono(format!("{} \u{25be}", campaign.name.to_uppercase())), |ui| {
                 for c in CAMPAIGNS {
                     let installed = c.is_installed(&self.paths);
-                    let text = if installed { format!("{}  {}", c.badge, c.name) } else { format!("{}  {} (not installed)", c.badge, c.name) };
+                    let text = if installed { format!("[{}] {}", c.badge, c.name) } else { format!("[{}] {} (not installed)", c.badge, c.name) };
                     let enabled = installed && c.id != self.campaign.id;
                     ui.add_enabled_ui(enabled, |ui| {
-                        if ui.button(text).clicked() {
-                            self.switch_campaign(c);
+                        if ui.button(theme::mono(text)).clicked() {
+                            let ctx = ui.ctx().clone();
+                            self.switch_campaign(&ctx, c);
                             ui.close();
                         }
                     });
                 }
                 ui.separator();
-                if ui.button("Manage campaigns\u{2026}").clicked() {
+                if ui.button(theme::mono("Manage campaigns\u{2026}")).clicked() {
                     self.go_to_campaigns();
                     ui.close();
                 }
@@ -485,39 +610,33 @@ impl App {
         );
     }
 
+    /// Isolated, single-purpose: nothing competes with LAUNCH for attention here - see
+    /// `docs/terminal-ui-blueprint.md` \u{a7}2/\u{a7}4.
     fn draw_bottom_bar(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::bottom("bottom_bar").show(ui, |ui| {
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                let dirty = self.dirty_count();
-                let status = if dirty > 0 {
-                    format!("\u{25cf} {dirty} unsaved change{}", if dirty == 1 { "" } else { "s" })
-                } else {
-                    "All changes saved".to_string()
-                };
-                ui.label(egui::RichText::new(status).color(if dirty > 0 { theme::AMBER } else { theme::MUTED }));
+        egui::Panel::bottom("action_bar")
+            .exact_size(96.0)
+            .frame(egui::Frame::default().fill(theme::bg_panel()))
+            .show(ui, |ui| {
+                let (label, install_needed, _) = self.play_status();
+                let accent = theme::accent(ui);
+                let busy = self.ce_installing;
+                let size = egui::vec2(360.0, 64.0);
 
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let (label, install_needed, _) = self.play_status();
-                    let busy = self.ce_installing;
-                    if ui.add_enabled(!busy, theme::primary_button(label, install_needed)).clicked() {
-                        self.on_play_or_install_clicked(install_needed);
-                    }
-                    ui.add_space(10.0);
-                    let dirty = self.dirty_count();
-                    if ui.add_enabled(dirty > 0, egui::Button::new("Save")).clicked() {
-                        if let Err(e) = self.save_all() {
-                            self.error_dialog = Some(("Couldn't save settings".to_string(), e));
-                        }
-                    }
-                    if ui.add_enabled(dirty > 0, egui::Button::new("Discard changes")).clicked() {
-                        self.store.revert();
-                        self.mods.revert(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info, self.campaign.id == "ce");
-                    }
-                });
+                ui.add_space(16.0);
+                let clicked = ui
+                    .horizontal(|ui| {
+                        let pad = ((ui.available_width() - size.x) / 2.0).max(0.0);
+                        ui.add_space(pad);
+                        let button = theme::primary_button(egui::RichText::new(label).size(18.0), install_needed, accent);
+                        ui.add_enabled_ui(!busy, |ui| ui.add_sized(size, button)).inner.clicked()
+                    })
+                    .inner;
+                ui.add_space(16.0);
+
+                if clicked {
+                    self.on_play_or_install_clicked(install_needed);
+                }
             });
-            ui.add_space(6.0);
-        });
     }
 
     fn draw_current_page(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
@@ -567,7 +686,7 @@ impl App {
             let mut open = true;
             egui::Modal::new(egui::Id::unique("info_dialog")).show(ctx, |ui| {
                 ui.set_max_width(420.0);
-                ui.label(theme::bold(&title).color(theme::ACCENT).size(15.0));
+                ui.label(theme::bold(&title).color(theme::SUCCESS).size(15.0));
                 ui.add_space(8.0);
                 ui.label(egui::RichText::new(message).color(theme::TEXT));
                 ui.add_space(12.0);

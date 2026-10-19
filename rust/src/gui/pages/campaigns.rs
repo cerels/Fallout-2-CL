@@ -90,7 +90,7 @@ fn campaign_card(app: &mut App, ui: &mut egui::Ui, campaign: &'static Campaign) 
                 }
             }
             if is_installed && !is_active && ui.button("Switch to this campaign").clicked() {
-                app.switch_campaign(campaign);
+                app.switch_campaign(ui.ctx(), campaign);
             }
         });
 
