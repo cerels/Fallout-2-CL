@@ -243,6 +243,6 @@ mod tests {
     #[test]
     fn civil_from_days_matches_known_dates() {
         assert_eq!(civil_from_days(0), (1970, 1, 1));
-        assert_eq!(civil_from_days(19877), (2024, 6, 15));
+        assert_eq!(civil_from_days(19889), (2024, 6, 15));
     }
 }
