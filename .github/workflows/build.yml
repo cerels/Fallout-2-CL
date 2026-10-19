@@ -22,7 +22,7 @@ defaults:
 jobs:
   build:
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           # 22.04 rather than latest so the binary links against an older glibc and

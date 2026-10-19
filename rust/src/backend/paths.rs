@@ -146,6 +146,20 @@ mod tests {
         Paths::new(dir.to_path_buf())
     }
 
+    /// On a case-sensitive filesystem (Linux), ci_path must return the on-disk spelling.
+    /// On a case-insensitive one (macOS, Windows) the as-typed path already opens the file,
+    /// so ci_path's fast path keeps it as-is - only require that it points at the file.
+    fn assert_resolves_to(resolved: &Path, on_disk: &Path) {
+        let upper = on_disk.with_file_name(on_disk.file_name().unwrap().to_string_lossy().to_uppercase());
+        let case_insensitive_fs = upper != on_disk && upper.exists();
+        if case_insensitive_fs {
+            assert!(resolved.exists(), "{resolved:?} should open {on_disk:?}");
+            assert_eq!(resolved.to_string_lossy().to_lowercase(), on_disk.to_string_lossy().to_lowercase());
+        } else {
+            assert_eq!(resolved, on_disk);
+        }
+    }
+
     #[test]
     fn game_dir_defaults_to_launcher_dir() {
         let tmp = tempfile::tempdir().unwrap();
@@ -184,7 +198,7 @@ mod tests {
         let paths = paths_in(tmp.path());
 
         let resolved = paths.ci_path("mods/npcarmor.dat", None);
-        assert_eq!(resolved, tmp.path().join("Mods").join("NPCArmor.dat"));
+        assert_resolves_to(&resolved, &tmp.path().join("Mods").join("NPCArmor.dat"));
     }
 
     #[test]
@@ -195,7 +209,7 @@ mod tests {
         let paths = paths_in(tmp.path());
 
         let resolved = paths.ci_path("mods/npcarmor/data.dat", None);
-        assert_eq!(resolved, tmp.path().join("Mods").join("NpcArmor").join("Data.DAT"));
+        assert_resolves_to(&resolved, &tmp.path().join("Mods").join("NpcArmor").join("Data.DAT"));
     }
 
     #[test]
@@ -204,7 +218,7 @@ mod tests {
         std::fs::write(tmp.path().join("CAFÉ.cfg"), b"").unwrap();
         let paths = paths_in(tmp.path());
 
-        assert_eq!(paths.ci_path("café.cfg", None), tmp.path().join("CAFÉ.cfg"));
+        assert_resolves_to(&paths.ci_path("café.cfg", None), &tmp.path().join("CAFÉ.cfg"));
     }
 
     #[test]
@@ -225,10 +239,7 @@ mod tests {
         std::fs::write(tmp.path().join("Mods").join("Thing.dat"), b"").unwrap();
         let paths = paths_in(tmp.path());
 
-        assert_eq!(
-            paths.ci_path("mods\\thing.dat", None),
-            tmp.path().join("Mods").join("Thing.dat")
-        );
+        assert_resolves_to(&paths.ci_path("mods\\thing.dat", None), &tmp.path().join("Mods").join("Thing.dat"));
     }
 
     #[test]
@@ -242,7 +253,7 @@ mod tests {
         // game_dir() is still tmp.path() here, so passing `other_root` as an explicit
         // root must take priority over the active campaign root.
         let resolved = paths.ci_path("file.txt", Some(&other_root));
-        assert_eq!(resolved, other_root.join("File.txt"));
+        assert_resolves_to(&resolved, &other_root.join("File.txt"));
     }
 
     #[test]
