@@ -839,6 +839,27 @@ mod tests {
     }
 
     #[test]
+    fn normalize_choice_with_non_digit_value_returns_it_unchanged() {
+        // Only "int"/"volume"/"choice" values that fully match `-?\d+` get re-stringified
+        // through an int round trip; anything else (including a choice whose stored value
+        // is a symbolic string) passes through untouched.
+        let s = setting("choice");
+        assert_eq!(s.normalize(Some("primary")), Some("primary".to_string()));
+    }
+
+    #[test]
+    fn normalize_volume_strips_leading_zeros_like_int() {
+        let s = setting("volume");
+        assert_eq!(s.normalize(Some("007")), Some("7".to_string()));
+    }
+
+    #[test]
+    fn normalize_float_with_unparseable_value_returns_it_unchanged() {
+        let s = setting("float");
+        assert_eq!(s.normalize(Some("not a float")), Some("not a float".to_string()));
+    }
+
+    #[test]
     fn enabled_by_equals_and_not() {
         let mut s = setting("text");
         s.enabled_if = Some(EnabledIf {
@@ -1043,6 +1064,353 @@ mod tests {
         let page = cat.pages.iter().find(|p| p.name == "UncoveredMod").expect("generated page");
         assert!(page.generated);
         assert!(page.groups[0].1[0].optional);
+    }
+
+    #[test]
+    fn load_catalog_rejects_option_entry_with_wrong_length() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        write_schema(
+            &tmp.path().join("mods"),
+            "bad_options.schema.toml",
+            r#"
+                [files]
+                mymod = "mods/mymod.ini"
+
+                [[group]]
+                file = "mymod"
+                section = "main"
+
+                [[group.setting]]
+                key = "x"
+                label = "X"
+                type = "choice"
+                options = [["0"]]
+            "#,
+        );
+
+        let cat = load_catalog(&paths);
+        assert!(cat.errors.iter().any(|e| e.contains("options entries are")));
+    }
+
+    #[test]
+    fn load_catalog_drops_a_setting_whose_required_engine_feature_is_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        std::fs::write(tmp.path().join("mods").join("mymod.ini"), "[main]\nx=1\n").unwrap();
+        // No "fallout2-ce" binary exists in tmp at all, so engine_supports() is false for
+        // every feature name - the setting below must be dropped, not kept or panicked on.
+        write_schema(
+            &tmp.path().join("mods"),
+            "needs_engine.schema.toml",
+            r#"
+                [files]
+                mymod = "mods/mymod.ini"
+
+                [[group]]
+                file = "mymod"
+                section = "main"
+
+                [[group.setting]]
+                key = "x"
+                label = "X"
+                type = "bool"
+                requires_engine = "some_new_feature"
+            "#,
+        );
+
+        let cat = load_catalog(&paths);
+        assert!(cat.errors.is_empty(), "unexpected errors: {:?}", cat.errors);
+        assert!(cat.pages.iter().all(|p| p.groups.iter().all(|(_, ss)| ss.iter().all(|s| s.key != "x"))));
+        assert!(cat.skipped.iter().any(|s| s.contains("some_new_feature")));
+    }
+
+    #[test]
+    fn load_catalog_keeps_a_setting_whose_required_engine_feature_is_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        std::fs::write(tmp.path().join("mods").join("mymod.ini"), "[main]\nx=1\n").unwrap();
+        // The engine binary "contains" the feature name the way CE's own strings do: a
+        // NUL-terminated name embedded somewhere in the binary.
+        let mut binary = b"garbage before \0".to_vec();
+        binary.extend_from_slice(b"some_new_feature\0");
+        binary.extend_from_slice(b"garbage after");
+        std::fs::write(tmp.path().join("fallout2-ce"), &binary).unwrap();
+        write_schema(
+            &tmp.path().join("mods"),
+            "needs_engine.schema.toml",
+            r#"
+                [files]
+                mymod = "mods/mymod.ini"
+
+                [[group]]
+                file = "mymod"
+                section = "main"
+
+                [[group.setting]]
+                key = "x"
+                label = "X"
+                type = "bool"
+                requires_engine = "some_new_feature"
+            "#,
+        );
+
+        let cat = load_catalog(&paths);
+        let found = cat.pages.iter().flat_map(|p| &p.groups).flat_map(|(_, ss)| ss).find(|s| s.key == "x");
+        assert!(found.is_some(), "setting should be kept when the engine supports the feature");
+    }
+
+    #[test]
+    fn load_catalog_drops_only_the_unsupported_option_not_the_whole_setting() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        std::fs::write(tmp.path().join("mods").join("mymod.ini"), "[main]\nx=1\n").unwrap();
+        // No engine binary at all, so "fancy_feature" is unsupported; only the option that
+        // depends on it should be removed, while the setting itself (with its other,
+        // unconditioned option) survives.
+        write_schema(
+            &tmp.path().join("mods"),
+            "option_requires.schema.toml",
+            r#"
+                [files]
+                mymod = "mods/mymod.ini"
+
+                [[group]]
+                file = "mymod"
+                section = "main"
+
+                [[group.setting]]
+                key = "x"
+                label = "X"
+                type = "choice"
+                options = [["0", "Plain"], ["1", "Fancy", "fancy_feature"]]
+            "#,
+        );
+
+        let cat = load_catalog(&paths);
+        let s = cat
+            .pages
+            .iter()
+            .flat_map(|p| &p.groups)
+            .flat_map(|(_, ss)| ss)
+            .find(|s| s.key == "x")
+            .expect("setting should survive");
+        assert_eq!(s.options, vec![("0".to_string(), "Plain".to_string())]);
+        assert!(cat.skipped.iter().any(|m| m.contains("fancy_feature")));
+    }
+
+    #[test]
+    fn load_catalog_group_without_page_key_uses_document_level_page() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        std::fs::write(tmp.path().join("mods").join("mymod.ini"), "[main]\nx=1\n").unwrap();
+        write_schema(
+            &tmp.path().join("mods"),
+            "doclevel.schema.toml",
+            r#"
+                page = "Doc Level Page"
+
+                [files]
+                mymod = "mods/mymod.ini"
+
+                [[group]]
+                file = "mymod"
+                section = "main"
+
+                [[group.setting]]
+                key = "x"
+                label = "X"
+                type = "text"
+            "#,
+        );
+
+        let cat = load_catalog(&paths);
+        assert!(cat.pages.iter().any(|p| p.name == "Doc Level Page"));
+    }
+
+    #[test]
+    fn load_catalog_group_with_empty_page_falls_back_to_schema_filename_not_doc_page() {
+        // Python: `group.get("page", page_name)` only falls back to the document-level
+        // `page_name` when the group has NO "page" key at all. An explicit empty string is
+        // present, so it's used as-is, then (being falsy) itself falls back to the schema
+        // file's own stem - never to the document-level page.
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        std::fs::write(tmp.path().join("mods").join("mymod.ini"), "[main]\nx=1\n").unwrap();
+        write_schema(
+            &tmp.path().join("mods"),
+            "emptypage.schema.toml",
+            r#"
+                page = "Doc Level Page"
+
+                [files]
+                mymod = "mods/mymod.ini"
+
+                [[group]]
+                page = ""
+                file = "mymod"
+                section = "main"
+
+                [[group.setting]]
+                key = "x"
+                label = "X"
+                type = "text"
+            "#,
+        );
+
+        let cat = load_catalog(&paths);
+        assert!(!cat.pages.iter().any(|p| p.name == "Doc Level Page"));
+        // file_stem() (like Python's Path.stem) only strips the *last* extension, so
+        // "emptypage.schema.toml" stems down to "emptypage.schema", not "emptypage".
+        assert!(cat.pages.iter().any(|p| p.name == "emptypage.schema"));
+    }
+
+    #[test]
+    fn load_catalog_drops_pages_left_fully_empty_after_filtering() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        // No mymod.ini on disk at all, so this optional setting's file check fails and it
+        // gets filtered out, leaving the page with zero groups.
+        write_schema(
+            &tmp.path().join("mods"),
+            "allfiltered.schema.toml",
+            r#"
+                page = "Entirely Filtered Page"
+
+                [files]
+                mymod = "mods/mymod.ini"
+
+                [[group]]
+                file = "mymod"
+                section = "main"
+
+                [[group.setting]]
+                key = "x"
+                label = "X"
+                type = "text"
+            "#,
+        );
+
+        let cat = load_catalog(&paths);
+        assert!(!cat.pages.iter().any(|p| p.name == "Entirely Filtered Page"));
+    }
+
+    #[test]
+    fn load_catalog_keeps_launcher_and_restoration_project_pages_even_when_empty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        write_schema(
+            &tmp.path().join("mods"),
+            "specialpages.schema.toml",
+            r#"
+                [files]
+                mymod = "mods/mymod.ini"
+
+                [[group]]
+                page = "Launcher"
+                file = "mymod"
+                section = "main"
+
+                [[group.setting]]
+                key = "x"
+                label = "X"
+                type = "text"
+
+                [[group]]
+                page = "Restoration Project"
+                file = "mymod"
+                section = "main"
+
+                [[group.setting]]
+                key = "y"
+                label = "Y"
+                type = "text"
+            "#,
+        );
+
+        // mymod.ini doesn't exist on disk, so both settings above (mod-schema settings are
+        // always optional) get filtered out - but these two page names are special-cased to
+        // stay regardless.
+        let cat = load_catalog(&paths);
+        assert!(cat.pages.iter().any(|p| p.name == "Launcher"));
+        assert!(cat.pages.iter().any(|p| p.name == "Restoration Project"));
+    }
+
+    #[test]
+    fn load_catalog_collects_mod_info_and_headline_for_an_installed_mod() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        std::fs::write(tmp.path().join("mods").join("MyMod.dat"), b"").unwrap();
+        write_schema(
+            &tmp.path().join("mods"),
+            "headline.schema.toml",
+            r#"
+                title = "My Headline Mod"
+                headline = true
+
+                [[mod]]
+                dat = "MyMod.dat"
+                description = "A great mod"
+            "#,
+        );
+
+        let cat = load_catalog(&paths);
+        assert_eq!(cat.mod_info.get("mymod.dat"), Some(&"A great mod".to_string()));
+        assert!(cat.headlines.contains(&"My Headline Mod".to_string()));
+    }
+
+    #[test]
+    fn load_catalog_skips_headline_when_mod_is_not_installed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        // No MyMod.dat written this time - the mod is not installed.
+        write_schema(
+            &tmp.path().join("mods"),
+            "headline2.schema.toml",
+            r#"
+                title = "Not Installed Mod"
+                headline = true
+
+                [[mod]]
+                dat = "MyMod.dat"
+                description = "A great mod"
+            "#,
+        );
+
+        let cat = load_catalog(&paths);
+        assert!(!cat.headlines.contains(&"Not Installed Mod".to_string()));
+    }
+
+    #[test]
+    fn load_catalog_reads_defaults_from_table() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        write_schema(
+            &tmp.path().join("mods"),
+            "defaults.schema.toml",
+            r#"
+                [defaults_from.cfg]
+                dat = "master.dat"
+                path = "fallout2.cfg"
+            "#,
+        );
+
+        let cat = load_catalog(&paths);
+        assert_eq!(
+            cat.defaults_from.get("cfg"),
+            Some(&("master.dat".to_string(), "fallout2.cfg".to_string()))
+        );
     }
 
     #[test]
