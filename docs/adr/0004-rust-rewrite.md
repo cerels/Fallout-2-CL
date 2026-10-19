@@ -37,3 +37,8 @@ reaches feature parity, then we cut over.
 - **egui** (picked) — immediate-mode model makes schema-driven dynamic forms trivial (loop over
   the schema, call `ui.checkbox()`/`ui.slider()`); its plain default look is the cheapest of the
   four to fix with a theme crate.
+
+## Update
+
+ADR 0008 escalates "amber/green CRT accents kept subtle rather than kitschy" above into a
+louder, more colorful, monospace-chrome terminal skin. The rest of this ADR stands.
