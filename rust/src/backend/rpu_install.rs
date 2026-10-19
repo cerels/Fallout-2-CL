@@ -323,6 +323,20 @@ mod tests {
     }
 
     #[test]
+    fn apply_rpu_ddraw_settings_treats_a_case_only_difference_as_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::write(tmp.path().join("ddraw.ini"), "[Debugging]\nSomeFlag=On\n").unwrap();
+
+        // RPU's own ddraw.ini spells the value "on" (lowercase) - same effective value, so
+        // the existing line's exact casing must be left alone, not rewritten to match.
+        apply_rpu_ddraw_settings(&paths, "[Debugging]\nSomeFlag=on\n").unwrap();
+
+        let saved = std::fs::read_to_string(tmp.path().join("ddraw.ini")).unwrap();
+        assert_eq!(saved, "[Debugging]\nSomeFlag=On\n");
+    }
+
+    #[test]
     fn apply_rpu_ddraw_settings_is_a_noop_without_an_existing_ddraw_ini() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());
@@ -379,6 +393,19 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());
         assert!(extract_rpu_release(&zip, &paths).is_err());
+    }
+
+    #[test]
+    fn extract_rpu_release_errors_even_if_only_ddraw_ini_is_present() {
+        // Matches Python precisely: capturing the top-level ddraw.ini text does its own
+        // `continue` without incrementing `copied`, so an archive containing *only*
+        // ddraw.ini (no mods/appearance/sound content at all) still counts as "nothing
+        // recognized" and errors - the captured text is simply discarded with it.
+        let zip = build_zip(&[("ddraw.ini", b"[Debugging]\nBoostScriptDialogLimit=10000\n")]);
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let err = extract_rpu_release(&zip, &paths).unwrap_err();
+        assert!(err.contains("no recognized files found"));
     }
 
     #[test]
