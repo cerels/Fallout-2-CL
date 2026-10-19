@@ -3,10 +3,13 @@
 //! already-installed one; this page is where you install a new one or fix up something
 //! like Et Tu's Fallout 1 data. Ported from `gui/campaigns_page.py`.
 
+use std::path::{Path, PathBuf};
+
 use eframe::egui;
 
 use crate::backend::campaigns::{Campaign, CAMPAIGNS};
 use crate::backend::launch_option::steam_launch_option;
+use crate::backend::paths::Paths;
 use crate::backend::steam_shortcuts::add_campaign_to_steam;
 use crate::backend::{ce_install, ettu_install, nevada_install, sonora_install};
 use crate::gui::app::{App, ConfirmAction, PendingConfirm};
@@ -91,6 +94,7 @@ fn campaign_card(app: &mut App, ui: &mut egui::Ui, campaign: &'static Campaign) 
         });
 
         if campaign.id == "ettu" && is_installed {
+            maybe_autodetect_fallout1(app);
             ui.add_space(8.0);
             ui.label(
                 egui::RichText::new(
@@ -103,9 +107,12 @@ fn campaign_card(app: &mut App, ui: &mut egui::Ui, campaign: &'static Campaign) 
             ui.horizontal(|ui| {
                 ui.add(
                     egui::TextEdit::singleline(&mut app.fallout1_path)
-                        .desired_width(380.0)
+                        .desired_width(300.0)
                         .hint_text("/path/to/Fallout 1/MASTER.DAT"),
                 );
+                if ui.button("Browse\u{2026}").clicked() {
+                    browse_for_fallout1_master_dat(app);
+                }
                 let extracting = app.campaigns_busy.get("ettu-f1").is_some();
                 if ui.add_enabled(!extracting, egui::Button::new(if extracting { "Extracting\u{2026}" } else { "Extract" })).clicked() {
                     start_fallout1_extract(app);
@@ -163,6 +170,60 @@ fn start_install(app: &mut App, campaign: &'static Campaign) {
         let paths = crate::gui::jobs::fresh_paths(target);
         JobOutcome::CampaignInstall(target.id, installer(&paths))
     });
+}
+
+/// Fallout 1 and Fallout 2 are usually sibling folders under the same Steam `common/`
+/// directory (e.g. `.../common/Fallout 1` next to `.../common/Fallout 2`). Tried once per
+/// session, the first time this card is shown with an empty path field - doesn't re-run on
+/// every frame, and never overwrites something the player already typed or picked.
+fn maybe_autodetect_fallout1(app: &mut App) {
+    if app.fallout1_autodetect_tried {
+        return;
+    }
+    app.fallout1_autodetect_tried = true;
+    if app.fallout1_path.trim().is_empty() {
+        if let Some(master_dat) = detect_fallout1_master_dat(&app.paths) {
+            app.fallout1_path = master_dat.to_string_lossy().into_owned();
+        }
+    }
+}
+
+/// Best-effort guess at a sibling Fallout 1 install's MASTER.DAT - `None` when nothing in
+/// the game's parent directory matches. The "Browse..." file dialog is always available
+/// regardless, so a missed or wrong guess here is never a dead end.
+fn detect_fallout1_master_dat(paths: &Paths) -> Option<PathBuf> {
+    let game_dir = paths.launcher_dir();
+    let parent = game_dir.parent()?;
+    let mut siblings: Vec<PathBuf> = std::fs::read_dir(parent)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir() && path != game_dir)
+        .collect();
+    siblings.sort();
+    siblings.into_iter().find_map(|dir| {
+        let candidate = paths.ci_path("MASTER.DAT", Some(&dir));
+        candidate.is_file().then_some(candidate)
+    })
+}
+
+/// Open a native "pick a file" dialog for Fallout 1's MASTER.DAT, starting from the
+/// autodetected folder (or the directory of whatever's already typed) when there is one.
+fn browse_for_fallout1_master_dat(app: &mut App) {
+    let mut dialog = rfd::FileDialog::new()
+        .set_title("Locate Fallout 1's MASTER.DAT")
+        .add_filter("MASTER.DAT", &["dat", "DAT"]);
+    let start_dir = Path::new(app.fallout1_path.trim())
+        .parent()
+        .filter(|dir| dir.is_dir())
+        .map(Path::to_path_buf)
+        .or_else(|| app.paths.launcher_dir().parent().map(Path::to_path_buf));
+    if let Some(dir) = start_dir {
+        dialog = dialog.set_directory(dir);
+    }
+    if let Some(path) = dialog.pick_file() {
+        app.fallout1_path = path.to_string_lossy().into_owned();
+    }
 }
 
 fn start_fallout1_extract(app: &mut App) {
