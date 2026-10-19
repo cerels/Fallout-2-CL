@@ -377,6 +377,45 @@ mod tests {
     }
 
     #[test]
+    fn round_trips_a_doubly_nested_map() {
+        // {"shortcuts": {"0": {"tags": {"favorite": "1"}}}}
+        let mut out = Vec::new();
+        out.push(0x00);
+        out.extend_from_slice(b"shortcuts\0");
+        out.push(0x00);
+        out.extend_from_slice(b"0\0");
+        out.push(0x00);
+        out.extend_from_slice(b"tags\0");
+        out.push(0x01);
+        out.extend_from_slice(b"favorite\0");
+        out.extend_from_slice(b"1\0");
+        out.push(0x08); // end of "tags"
+        out.push(0x08); // end of "0"
+        out.push(0x08); // end of "shortcuts"
+
+        let (root, consumed) = read_binary_vdf(&out, 0, out.len()).unwrap();
+        assert_eq!(consumed, out.len());
+        let tags = root
+            .get("shortcuts")
+            .unwrap()
+            .as_map()
+            .unwrap()
+            .get("0")
+            .unwrap()
+            .as_map()
+            .unwrap()
+            .get("tags")
+            .unwrap()
+            .as_map()
+            .unwrap();
+        assert_eq!(tags.get("favorite").unwrap().as_str(), Some("1"));
+
+        let mut written = Vec::new();
+        write_binary_vdf(&root, true, &mut written);
+        assert_eq!(written, out);
+    }
+
+    #[test]
     fn write_shortcuts_backs_up_once_and_round_trips() {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("shortcuts.vdf");
@@ -428,6 +467,82 @@ mod tests {
             shortcuts2.get(&first_key).unwrap().as_map().unwrap().get("appname").unwrap().as_str(),
             Some("Fallout 2 Launcher — Nevada (renamed)")
         );
+    }
+
+    #[test]
+    fn add_non_steam_game_preserves_icon_last_play_time_and_tags_on_update() {
+        let tmp = tempfile::tempdir().unwrap();
+        let exe = PathBuf::from("/game/f2launcher");
+        let start = PathBuf::from("/game");
+
+        // Seed an existing entry with fields a real Steam client would have set, that this
+        // launcher's own write must not clobber when it later updates the same shortcut.
+        let mut tags = VdfMap::new();
+        tags.insert("favorite".to_string(), VdfValue::Str("1".to_string()));
+        let mut existing_entry = VdfMap::new();
+        existing_entry.insert("appname".to_string(), VdfValue::Str("Old Name".to_string()));
+        existing_entry.insert(
+            "exe".to_string(),
+            VdfValue::Str(format!("\"{}\"", exe.display())),
+        );
+        existing_entry.insert("icon".to_string(), VdfValue::Str("/game/icon.ico".to_string()));
+        existing_entry.insert("LastPlayTime".to_string(), VdfValue::Int(1_700_000_000));
+        existing_entry.insert("FlatpakAppID".to_string(), VdfValue::Str("com.example.App".to_string()));
+        existing_entry.insert("tags".to_string(), VdfValue::Map(tags.clone()));
+        let mut shortcuts = VdfMap::new();
+        shortcuts.insert("0".to_string(), VdfValue::Map(existing_entry));
+        let mut root = VdfMap::new();
+        root.insert("shortcuts".to_string(), VdfValue::Map(shortcuts));
+        let path = tmp.path().join("shortcuts.vdf");
+        let mut data = Vec::new();
+        write_binary_vdf(&root, true, &mut data);
+        std::fs::write(&path, data).unwrap();
+
+        add_non_steam_game_in(tmp.path(), "New Name", &exe, &start, "--campaign=nevada").unwrap();
+
+        let updated = read_shortcuts(&path).unwrap();
+        let entry = updated.get("shortcuts").unwrap().as_map().unwrap().get("0").unwrap().as_map().unwrap();
+        assert_eq!(entry.get("appname").unwrap().as_str(), Some("New Name"));
+        assert_eq!(entry.get("icon").unwrap().as_str(), Some("/game/icon.ico"));
+        assert_eq!(entry.get("LastPlayTime"), Some(&VdfValue::Int(1_700_000_000)));
+        assert_eq!(entry.get("FlatpakAppID").unwrap().as_str(), Some("com.example.App"));
+        assert_eq!(entry.get("tags"), Some(&VdfValue::Map(tags)));
+    }
+
+    #[test]
+    fn add_non_steam_game_errors_when_shortcuts_key_is_not_a_map() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut root = VdfMap::new();
+        root.insert("shortcuts".to_string(), VdfValue::Str("not a map".to_string()));
+        let path = tmp.path().join("shortcuts.vdf");
+        let mut data = Vec::new();
+        write_binary_vdf(&root, true, &mut data);
+        std::fs::write(&path, data).unwrap();
+
+        let result = add_non_steam_game_in(
+            tmp.path(),
+            "Name",
+            Path::new("/game/f2launcher"),
+            Path::new("/game"),
+            "",
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn add_non_steam_game_errors_cleanly_on_a_corrupt_existing_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("shortcuts.vdf");
+        std::fs::write(&path, [0xFFu8, 0x00, 0x00]).unwrap(); // 0xFF is not a valid type byte
+
+        let result = add_non_steam_game_in(
+            tmp.path(),
+            "Name",
+            Path::new("/game/f2launcher"),
+            Path::new("/game"),
+            "",
+        );
+        assert!(result.is_err());
     }
 
     #[test]
