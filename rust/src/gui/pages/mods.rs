@@ -19,16 +19,20 @@ use crate::gui::theme;
 use crate::gui::widgets::card;
 
 #[derive(Clone)]
-struct ModRow {
-    dat: String,
-    enabled: bool,
-    installed: bool,
+pub(crate) struct ModRow {
+    pub(crate) dat: String,
+    pub(crate) enabled: bool,
+    pub(crate) installed: bool,
     entry: Option<CatalogEntry>,
     subtitle: String,
 }
 
 pub struct ModsPage {
-    rows: Vec<ModRow>,
+    // `pub(crate)` rather than private + accessor methods: `pages::rpu::show` renders a
+    // subset of these same rows (RPU's own optional extras and bundled companions) - see its
+    // module doc comment - so it needs direct read/write access from another page module in
+    // this crate, same as `app.rs` already has to `App`'s own fields.
+    pub(crate) rows: Vec<ModRow>,
     initial: Vec<(String, bool)>,
     hide_missing: bool,
     pending_updates: HashMap<String, String>,
@@ -237,10 +241,22 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     });
     ui.add_space(8.0);
 
+    // RPU's own core, optional extras and bundled companions never show here - they're
+    // managed entirely from RPU's own page (see `GLOSSARY.md`'s RPU entry and
+    // `pages::rpu::show`), even though their toggle state lives in these same `rows`.
+    let rpu_owned = if app.campaign.id == "ce" {
+        crate::backend::rpu_install::owned_file_names(&app.paths)
+    } else {
+        HashSet::new()
+    };
+
     card(ui, "Load order", |ui| {
         let rows = app.mods.rows.clone();
         let mut move_requested: Option<(usize, i32)> = None;
         for (i, row) in rows.iter().enumerate() {
+            if rpu_owned.contains(&row.dat.to_lowercase()) {
+                continue;
+            }
             if !row.installed && app.mods.hide_missing {
                 continue;
             }
