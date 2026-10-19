@@ -7,6 +7,7 @@
 pub mod campaigns;
 pub mod ce_install;
 pub mod dat;
+pub mod ettu_install;
 pub mod http;
 pub mod ini_file;
 pub mod keys;
