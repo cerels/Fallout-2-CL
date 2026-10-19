@@ -203,8 +203,10 @@ pub fn install_ce(paths: &Paths) -> Result<(), String> {
     save_ce_state(paths, &state).map_err(|e| e.to_string())
 }
 
+/// Shared with the other installers that drop in a downloaded binary (sonora_install,
+/// nevada_install, rpu_install).
 #[cfg(unix)]
-fn make_executable(path: &std::path::Path) -> io::Result<()> {
+pub(crate) fn make_executable(path: &std::path::Path) -> io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     let mut perms = std::fs::metadata(path)?.permissions();
     perms.set_mode(perms.mode() | 0o111);
@@ -212,7 +214,7 @@ fn make_executable(path: &std::path::Path) -> io::Result<()> {
 }
 
 #[cfg(not(unix))]
-fn make_executable(_path: &std::path::Path) -> io::Result<()> {
+pub(crate) fn make_executable(_path: &std::path::Path) -> io::Result<()> {
     Ok(()) // Windows has no executable bit to set.
 }
 

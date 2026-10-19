@@ -17,4 +17,5 @@ pub mod mod_catalog;
 pub mod paths;
 pub mod saves;
 pub mod schema;
+pub mod sonora_install;
 pub mod steam_shortcuts;
