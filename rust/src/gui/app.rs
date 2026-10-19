@@ -42,8 +42,9 @@ pub(crate) struct PendingConfirm {
 /// One sidebar entry. `Settings` pages are looked up by name each frame rather than by index
 /// into `store.catalog.pages`, so a reload that changes the page set can't leave a stale
 /// index pointing at the wrong page. `SavesPlaceholder` is not a real feature - see
-/// `docs/adr/0008-terminal-skin-escalation.md`'s "Explicitly out of scope" - it only exists so
-/// the UTIL group has the `[LOCKED]` row the terminal-skin wireframe calls for.
+/// `docs/adr/0008-terminal-skin-escalation.md`'s "Explicitly out of scope" - it's a disabled
+/// row in the UTIL group (see `nav_needs_attention`'s doc comment for why it has no `[LOCKED]`
+/// text) with a hover tooltip explaining why it's unavailable.
 enum NavEntry {
     Play,
     Campaigns,
@@ -94,25 +95,6 @@ impl NavEntry {
             NavEntry::Play | NavEntry::Campaigns => NavTier::Primary,
             NavEntry::Settings(_) => NavTier::Config,
             NavEntry::Rpu | NavEntry::Mods | NavEntry::Launcher | NavEntry::SavesPlaceholder => NavTier::Util,
-        }
-    }
-
-    /// The bracket-sigil tag this row shows before its label - see
-    /// `docs/terminal-ui-blueprint.md` \u{a7}3 ("Bracket-sigil rules"). Settings pages fall
-    /// back to the generic `CFG` for any schema-driven page name this lookup doesn't
-    /// recognize.
-    fn tag(&self) -> &'static str {
-        match self {
-            NavEntry::Play | NavEntry::Campaigns | NavEntry::Launcher => "SYS",
-            NavEntry::Rpu => "RPU",
-            NavEntry::Mods => "MOD",
-            NavEntry::SavesPlaceholder => "LOCKED",
-            NavEntry::Settings(name) => match name.as_str() {
-                "Display" => "GFX",
-                "Audio" => "AUD",
-                "Controls" => "KEY",
-                _ => "CFG",
-            },
         }
     }
 }
@@ -493,7 +475,7 @@ impl App {
         egui::Panel::left("nav")
             .resizable(false)
             .exact_size(250.0)
-            .frame(egui::Frame::default().fill(theme::bg_panel()).stroke(egui::Stroke::new(2.0, accent)).inner_margin(egui::Margin::same(8)))
+            .frame(egui::Frame::default().fill(theme::bg_panel()).inner_margin(egui::Margin::same(8)))
             .show(ui, |ui| {
                 ui.add_space(8.0);
                 self.draw_campaign_switcher(ui);
@@ -519,7 +501,7 @@ impl App {
                         shown_tier = Some(tier);
 
                         let locked = matches!(self.nav[i], NavEntry::SavesPlaceholder);
-                        let (tag, tag_color) = self.nav_tag(i);
+                        let needs_attention = self.nav_needs_attention(i);
                         let base_label = match &self.nav[i] {
                             NavEntry::Settings(name) => {
                                 let hits = self
@@ -538,11 +520,8 @@ impl App {
                             }
                             other => other.label().to_string(),
                         };
-                        let label = format!("[{tag}] {}", base_label.to_uppercase());
-                        let text = match tag_color {
-                            Some(c) => theme::mono(label).color(c),
-                            None => theme::mono(label),
-                        };
+                        let label = base_label.to_uppercase();
+                        let text = if needs_attention { theme::mono(label).color(theme::AMBER) } else { theme::mono(label) };
                         let hits_zero = matches!(&self.nav[i], NavEntry::Settings(name) if {
                             let hits = self.store.catalog.pages.iter().find(|p| &p.name == name)
                                 .map(|p| pages::settings::count_matches(&p.groups, &search)).unwrap_or(0);
@@ -550,32 +529,29 @@ impl App {
                         });
                         let enabled = !locked && (search.is_empty() || !hits_zero);
                         ui.add_enabled_ui(enabled, |ui| {
-                            if ui.selectable_label(self.current == i, text).clicked() {
+                            let response = ui.selectable_label(self.current == i, text);
+                            let response = if locked { response.on_disabled_hover_text("Not available yet") } else { response };
+                            if response.clicked() {
                                 self.current = i;
                             }
                         });
                     }
                 });
             });
+        egui::Panel::left("nav_accent_rule").resizable(false).exact_size(2.0).frame(egui::Frame::default().fill(accent)).show(ui, |_ui| {});
     }
 
-    /// The `[TAG]` sigil and, when the row needs a color override, what color - `[!]`
-    /// (warning) overrides the entry's normal tag when it needs attention, `[LOCKED]` for the
-    /// Saves placeholder (dim; redundant with its disabled styling, but explicit is cheap),
-    /// and the normal `NavEntry::tag()` with no override otherwise - letting the row's label
-    /// render in the ordinary text color instead of forcing every row dim.
-    /// See `docs/terminal-ui-blueprint.md` \u{a7}3.
-    fn nav_tag(&self, i: usize) -> (String, Option<egui::Color32>) {
+    /// Whether nav row `i` needs a player's attention right now - drawn as its label turning
+    /// `AMBER` instead of a `[!]` prefix (brackets stay reserved for the campaign badge; see
+    /// `docs/terminal-ui-blueprint.md` \u{a7}3's bracket-sigil rules, revised to color-only for
+    /// the nav list after it proved busier than the "modern and sleek" half of the brief
+    /// wanted).
+    fn nav_needs_attention(&self, i: usize) -> bool {
         match &self.nav[i] {
-            NavEntry::SavesPlaceholder => ("LOCKED".to_string(), Some(theme::MUTED)),
-            NavEntry::Play if self.campaign.id == "ce" && needs_ce_install(&self.paths) => {
-                ("!".to_string(), Some(theme::AMBER))
-            }
-            NavEntry::Play if self.campaign.id != "ce" && !self.campaign.is_installed(&self.paths) => {
-                ("!".to_string(), Some(theme::AMBER))
-            }
-            NavEntry::Rpu if self.rpu_pending_update.is_some() => ("!".to_string(), Some(theme::AMBER)),
-            other => (other.tag().to_string(), None),
+            NavEntry::Play if self.campaign.id == "ce" => needs_ce_install(&self.paths),
+            NavEntry::Play => !self.campaign.is_installed(&self.paths),
+            NavEntry::Rpu => self.rpu_pending_update.is_some(),
+            _ => false,
         }
     }
 

@@ -210,10 +210,15 @@ pub fn parse_hex(hex: &str) -> egui::Color32 {
     parsed.flatten().unwrap_or(ACCENT)
 }
 
-/// A button styled as the one unmissable "primary" action (Play / Install / Launch), echoing
-/// the old Qt build's `#primary` button. `warn` swaps it from the campaign accent to amber -
-/// "needs attention first" (install-needed, pending update, ...).
+/// The one unmissable "primary" action (Play / Install / Launch) - styled as a backlit switch
+/// (dark bezel, glowing outline and label) rather than a solid-filled pill, so it reads as
+/// mechanical rather than as just another big SaaS button; see
+/// `docs/terminal-ui-blueprint.md`'s LAUNCH-button note. `warn` swaps the glow from the
+/// campaign accent to amber - "needs attention first" (install-needed, pending update, ...).
 pub fn primary_button(text: impl Into<egui::WidgetText>, warn: bool, accent: egui::Color32) -> egui::Button<'static> {
-    let bg = if warn { AMBER } else { accent };
-    egui::Button::new(mono_bold(text.into().text()).color(DARK_FG)).fill(bg).corner_radius(10.0)
+    let glow = if warn { AMBER } else { accent };
+    egui::Button::new(mono_bold(text.into().text()).color(glow))
+        .fill(DARK_FG)
+        .stroke(egui::Stroke::new(2.0, glow))
+        .corner_radius(4.0)
 }
