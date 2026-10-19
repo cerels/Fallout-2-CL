@@ -62,6 +62,9 @@ pub struct Setting {
     pub option_requires: HashMap<String, String>,
     /// From a mod schema: hidden when its file isn't installed.
     pub optional: bool,
+    /// One player preference across every installed campaign that shares this file's
+    /// config format, synced on save (see `docs/adr/0003-shared-settings-sync-on-save.md`).
+    pub shared: bool,
 }
 
 impl Setting {
@@ -88,6 +91,7 @@ impl Setting {
             requires_engine: None,
             option_requires: HashMap::new(),
             optional: false,
+            shared: false,
         }
     }
 
@@ -391,6 +395,7 @@ fn setting_from_toml(
         option_requires,
         requires_engine: data.get("requires_engine").and_then(|v| v.as_str()).map(str::to_string),
         optional,
+        shared: data.get("shared").and_then(|v| v.as_bool()).unwrap_or(false),
         minimum: data.get("min").and_then(as_number).unwrap_or(0.0),
         maximum: data.get("max").and_then(as_number).unwrap_or(100.0),
         step: data.get("step").and_then(as_number).unwrap_or(1.0),
@@ -1428,5 +1433,88 @@ mod tests {
             .expect("resolution setting");
         assert_eq!(resolution.kind, "resolution");
         assert_eq!(resolution.file, "cfg");
+    }
+
+    #[test]
+    fn setting_defaults_to_not_shared() {
+        assert!(!Setting::basic("cfg", "screen", "scale", "Scale", "choice").shared);
+    }
+
+    #[test]
+    fn load_catalog_parses_shared_flag_on_a_setting() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        std::fs::write(tmp.path().join("mods").join("mymod.ini"), "[main]\nx=1\ny=1\n").unwrap();
+        write_schema(
+            &tmp.path().join("mods"),
+            "shared.schema.toml",
+            r#"
+                [files]
+                mymod = "mods/mymod.ini"
+
+                [[group]]
+                file = "mymod"
+                section = "main"
+
+                [[group.setting]]
+                key = "x"
+                label = "X"
+                type = "bool"
+                shared = true
+
+                [[group.setting]]
+                key = "y"
+                label = "Y"
+                type = "bool"
+            "#,
+        );
+
+        let cat = load_catalog(&paths);
+        let all: Vec<&Setting> = cat.pages.iter().flat_map(|p| &p.groups).flat_map(|(_, ss)| ss).collect();
+        assert!(all.iter().find(|s| s.key == "x").expect("x").shared);
+        assert!(!all.iter().find(|s| s.key == "y").expect("y").shared);
+    }
+
+    #[test]
+    fn core_display_and_audio_schemas_mark_the_agreed_settings_shared() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let cat = load_catalog(&paths);
+        let all: Vec<&Setting> = cat.pages.iter().flat_map(|p| &p.groups).flat_map(|(_, ss)| ss).collect();
+
+        let shared_keys: HashSet<&str> =
+            all.iter().filter(|s| s.shared).map(|s| s.key.as_str()).collect();
+        let expected: HashSet<&str> = [
+            "resolution_x|resolution_y",
+            "windowed",
+            "scale",
+            "mouse_lock",
+            "master_volume",
+            "music_volume",
+            "sndfx_volume",
+            "speech_volume",
+            "music",
+            "sounds",
+            "speech",
+            "float_speech",
+            "pipboy_speech",
+            "gapless_music",
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(shared_keys, expected);
+
+        // Nothing outside Display/Audio is shared - gameplay/combat/companions/interface
+        // and mod settings stay per-campaign.
+        for s in &all {
+            if s.shared {
+                assert!(
+                    matches!(s.file.as_str(), "cfg"),
+                    "unexpected shared setting outside the core cfg file: {}",
+                    s.key
+                );
+            }
+        }
     }
 }

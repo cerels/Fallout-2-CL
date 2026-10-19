@@ -11,6 +11,7 @@ label = "Resolution"
 type = "resolution"
 default = "640x480"
 help = "Size of the game window or screen in physical pixels."
+shared = true
 
 [[group.setting]]
 section = "screen"
@@ -20,6 +21,7 @@ type = "choice"
 default = "0"
 help = "Borderless window usually gives the smoothest result."
 options = [["0", "Fullscreen"], ["1", "Windowed"], ["2", "Borderless window"]]
+shared = true
 
 [[group.setting]]
 section = "screen"
@@ -30,6 +32,7 @@ default = "1"
 help = "Draws the game at a lower resolution and enlarges it. Higher = bigger UI, less map on screen."
 options = [["1", "1× (tiny UI, most map visible)"], ["2", "2×"], ["3", "3×"], ["4", "4×"]]
 hint = "scale"
+shared = true
 
 [[group.setting]]
 section = "screen"
@@ -38,6 +41,7 @@ label = "Keep mouse inside the game window"
 type = "bool"
 default = "0"
 help = "Needed for edge scrolling in windowed or borderless mode, especially with more than one monitor."
+shared = true
 
 [[group]]
 name = "Startup, menus & movies"

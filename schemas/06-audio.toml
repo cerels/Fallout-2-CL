@@ -10,6 +10,7 @@ key = "master_volume"
 label = "Master"
 type = "volume"
 default = "22281"
+shared = true
 
 [[group.setting]]
 section = "sound"
@@ -17,6 +18,7 @@ key = "music_volume"
 label = "Music"
 type = "volume"
 default = "22281"
+shared = true
 
 [[group.setting]]
 section = "sound"
@@ -24,6 +26,7 @@ key = "sndfx_volume"
 label = "Sound effects"
 type = "volume"
 default = "22281"
+shared = true
 
 [[group.setting]]
 section = "sound"
@@ -31,6 +34,7 @@ key = "speech_volume"
 label = "Speech"
 type = "volume"
 default = "22281"
+shared = true
 
 [[group]]
 name = "Sound"
@@ -42,6 +46,7 @@ key = "music"
 label = "Music"
 type = "bool"
 default = "1"
+shared = true
 
 [[group.setting]]
 section = "sound"
@@ -49,6 +54,7 @@ key = "sounds"
 label = "Sound effects"
 type = "bool"
 default = "1"
+shared = true
 
 [[group.setting]]
 section = "sound"
@@ -56,6 +62,7 @@ key = "speech"
 label = "Speech"
 type = "bool"
 default = "1"
+shared = true
 
 [[group.setting]]
 section = "sound"
@@ -63,6 +70,7 @@ key = "float_speech"
 label = "Voiced floating text (taunts, barks)"
 type = "bool"
 default = "1"
+shared = true
 
 [[group.setting]]
 section = "sound"
@@ -70,6 +78,7 @@ key = "pipboy_speech"
 label = "Voiced holodisks"
 type = "bool"
 default = "1"
+shared = true
 
 [[group.setting]]
 section = "sound"
@@ -77,6 +86,7 @@ key = "gapless_music"
 label = "Don't restart music between maps with the same track"
 type = "bool"
 default = "1"
+shared = true
 
 [[group.setting]]
 section = "sound"
