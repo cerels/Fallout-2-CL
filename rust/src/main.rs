@@ -6,6 +6,10 @@
 //! The GUI itself lives in `gui/` - see `docs/adr/0004-rust-rewrite.md` for why egui, and
 //! `gui/mod.rs` for how it's organized.
 
+// No console window behind the GUI on Windows (the Python build's PyInstaller spec used
+// `console=False` for the same reason).
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod backend;
 mod gui;
 

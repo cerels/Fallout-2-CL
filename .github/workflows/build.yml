@@ -1,8 +1,9 @@
 name: Build launcher binaries
 
-# Builds a single-file executable per OS with PyInstaller (packaging/f2launcher.spec)
-# and attaches them to a GitHub Release. Each OS must build natively - PyInstaller
-# can't cross-compile - hence the matrix instead of one job.
+# Builds the Rust launcher (rust/) natively per OS and attaches the binaries to a GitHub
+# Release. The schemas, fonts and icon are baked in with include_str!/include_bytes!, so
+# each binary is a single self-contained file. Pushing a tag like v0.1.1 runs the release;
+# workflow_dispatch just builds and uploads workflow artifacts (no release).
 
 on:
   push:
@@ -10,12 +11,23 @@ on:
       - "v*"
   workflow_dispatch:
 
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+    working-directory: rust
+
 jobs:
   build:
     strategy:
+      fail-fast: true
       matrix:
         include:
-          - os: ubuntu-latest
+          # 22.04 rather than latest so the binary links against an older glibc and
+          # runs on more distros (SteamOS included).
+          - os: ubuntu-22.04
             artifact: f2launcher-linux
           - os: windows-latest
             artifact: f2launcher-windows.exe
@@ -25,24 +37,54 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Check tag matches Cargo.toml version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          crate_version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+          if [ "v$crate_version" != "${{ github.ref_name }}" ]; then
+            echo "::error::Tag ${{ github.ref_name }} doesn't match Cargo.toml version $crate_version"
+            exit 1
+          fi
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-dev libwayland-dev
+
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          python-version: "3.12"
+          # macOS ships a universal (Intel + Apple Silicon) binary, built per-arch and lipo'd.
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Install dependencies
-        run: pip install PySide6 pyinstaller certifi
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
 
-      - name: Build
-        run: pyinstaller --noconfirm packaging/f2launcher.spec
+      - name: Test
+        run: cargo test --locked --release
 
-      - name: Rename binary (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: mv dist/f2launcher "${{ matrix.artifact }}"
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --locked --release
+          mv target/release/f2launcher "../${{ matrix.artifact }}"
 
-      - name: Rename binary (Windows)
+      - name: Build (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: Move-Item dist/f2launcher.exe "${{ matrix.artifact }}"
+        run: |
+          cargo build --locked --release
+          mv target/release/f2launcher.exe "../${{ matrix.artifact }}"
+
+      - name: Build (macOS universal)
+        if: runner.os == 'macOS'
+        run: |
+          cargo build --locked --release --target aarch64-apple-darwin
+          cargo build --locked --release --target x86_64-apple-darwin
+          lipo -create -output "../${{ matrix.artifact }}" \
+            target/aarch64-apple-darwin/release/f2launcher \
+            target/x86_64-apple-darwin/release/f2launcher
 
       - uses: actions/upload-artifact@v4
         with:
@@ -51,9 +93,13 @@ jobs:
 
   release:
     needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    defaults:
+      run:
+        working-directory: .
     steps:
       - uses: actions/checkout@v4
 
