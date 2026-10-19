@@ -112,7 +112,16 @@ pub fn setting_row(ui: &mut egui::Ui, s: &Setting, store: &mut Store, capturing:
             ui,
             |ui| {
                 ui.vertical(|ui| {
-                    ui.label(theme::bold(&s.label).color(theme::STRONG_TEXT));
+                    ui.horizontal(|ui| {
+                        ui.label(theme::bold(&s.label).color(theme::STRONG_TEXT));
+                        if s.shared {
+                            ui.label(egui::RichText::new("shared").small().color(theme::accent(ui)))
+                                .on_hover_text(
+                                    "Saving this writes the same value into every other installed \
+                                     campaign that shares this engine's config format.",
+                                );
+                        }
+                    });
                     if !s.help.is_empty() {
                         ui.label(egui::RichText::new(&s.help).color(theme::MUTED).small());
                     }
