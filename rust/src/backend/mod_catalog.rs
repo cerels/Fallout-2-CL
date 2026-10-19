@@ -3,7 +3,7 @@
 //! update-checking and deleting.
 
 use std::collections::BTreeMap;
-use std::io::{self, Read};
+use std::io;
 use std::path::{Path, PathBuf};
 
 use super::paths::Paths;
@@ -98,13 +98,7 @@ pub fn resolve_download(entry: &CatalogEntry) -> Result<ResolvedDownload, String
         .as_deref()
         .ok_or_else(|| format!("{}: catalog entry has neither github nor raw", entry.name))?;
     let api_url = format!("https://api.github.com/repos/{github}/releases/latest");
-    let body: serde_json::Value = ureq::get(&api_url)
-        .set("User-Agent", "f2launcher")
-        .timeout(std::time::Duration::from_secs(20))
-        .call()
-        .map_err(|e| e.to_string())?
-        .into_json()
-        .map_err(|e| e.to_string())?;
+    let body = super::http::get_json(&api_url, std::time::Duration::from_secs(20))?;
     pick_release_asset(&body, &entry.asset, &entry.name)
 }
 
@@ -182,7 +176,7 @@ pub fn check_for_update(paths: &Paths, entry: &CatalogEntry) -> Option<String> {
 /// Download `entry`'s file and place it under `mods/`.
 pub fn install_catalog_entry(paths: &Paths, entry: &CatalogEntry) -> Result<(), String> {
     let resolved = resolve_download(entry)?;
-    let bytes = download(&resolved.url)?;
+    let bytes = super::http::get_bytes(&resolved.url, std::time::Duration::from_secs(60))?;
 
     let mods_dir = paths.ci_path("mods", None);
     std::fs::create_dir_all(&mods_dir).map_err(|e| e.to_string())?;
@@ -200,17 +194,6 @@ pub fn install_catalog_entry(paths: &Paths, entry: &CatalogEntry) -> Result<(), 
         save_catalog_state(paths, &state).map_err(|e| e.to_string())?;
     }
     Ok(())
-}
-
-fn download(url: &str) -> Result<Vec<u8>, String> {
-    let resp = ureq::get(url)
-        .set("User-Agent", "f2launcher")
-        .timeout(std::time::Duration::from_secs(60))
-        .call()
-        .map_err(|e| e.to_string())?;
-    let mut bytes = Vec::new();
-    resp.into_reader().read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-    Ok(bytes)
 }
 
 /// Copies a downloaded zip's `mods/` contents into `mods_dir` as-is; everything else in the

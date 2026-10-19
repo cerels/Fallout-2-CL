@@ -5,7 +5,9 @@
 //! only the implementation idioms change to fit Rust.
 
 pub mod campaigns;
+pub mod ce_install;
 pub mod dat;
+pub mod http;
 pub mod ini_file;
 pub mod keys;
 pub mod launch;
