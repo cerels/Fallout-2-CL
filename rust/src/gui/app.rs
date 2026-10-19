@@ -75,15 +75,19 @@ impl NavEntry {
     }
 }
 
-fn build_nav(catalog: &Catalog) -> Vec<NavEntry> {
+/// `campaign` gates `NavEntry::Rpu` - RPU is a CE-only content overlay (see `GLOSSARY.md`),
+/// so its tab must never show up after switching to Et Tu/Sonora/Nevada.
+fn build_nav(catalog: &Catalog, campaign: &Campaign) -> Vec<NavEntry> {
     let mut nav = vec![NavEntry::Play, NavEntry::Campaigns];
     for page in &catalog.pages {
-        if page.name == "Launcher" || page.name == "Restoration Project" {
+        if page.name == "Launcher" || page.name == "Restoration Project" || page.name == "Unofficial Patch" {
             continue;
         }
         nav.push(NavEntry::Settings(page.name.clone()));
     }
-    nav.push(NavEntry::Rpu);
+    if campaign.id == "ce" {
+        nav.push(NavEntry::Rpu);
+    }
     nav.push(NavEntry::Mods);
     nav.push(NavEntry::Launcher);
     nav
@@ -124,9 +128,9 @@ impl App {
         }
         let mod_catalog = load_mod_catalog();
         let store = Store::new(&paths, catalog);
-        let nav = build_nav(&store.catalog);
+        let nav = build_nav(&store.catalog, campaign);
         let play = PlayPage::new(&paths);
-        let mods = ModsPage::new(&paths, &mod_catalog, &store.catalog.mod_info);
+        let mods = ModsPage::new(&paths, &mod_catalog, &store.catalog.mod_info, campaign.id == "ce");
 
         App {
             paths,
@@ -172,8 +176,8 @@ impl App {
         self.mod_catalog = load_mod_catalog();
         self.store = Store::new(&self.paths, catalog);
         self.play = PlayPage::new(&self.paths);
-        self.mods = ModsPage::new(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info);
-        self.nav = build_nav(&self.store.catalog);
+        self.mods = ModsPage::new(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info, self.campaign.id == "ce");
+        self.nav = build_nav(&self.store.catalog, self.campaign);
         self.current = current_key.and_then(|k| self.nav.iter().position(|n| n.key() == k)).unwrap_or(0);
     }
 
@@ -494,7 +498,7 @@ impl App {
                     }
                     if ui.add_enabled(dirty > 0, egui::Button::new("Discard changes")).clicked() {
                         self.store.revert();
-                        self.mods.revert(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info);
+                        self.mods.revert(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info, self.campaign.id == "ce");
                     }
                 });
             });

@@ -37,7 +37,12 @@ pub struct ModsPage {
 }
 
 impl ModsPage {
-    pub fn new(paths: &SharedPaths, mod_catalog: &[CatalogEntry], mod_info: &HashMap<String, String>) -> Self {
+    pub fn new(
+        paths: &SharedPaths,
+        mod_catalog: &[CatalogEntry],
+        mod_info: &HashMap<String, String>,
+        is_ce: bool,
+    ) -> Self {
         let mut page = ModsPage {
             rows: Vec::new(),
             initial: Vec::new(),
@@ -46,11 +51,22 @@ impl ModsPage {
             busy: HashSet::new(),
             checked_for_updates: false,
         };
-        page.rebuild(paths, mod_catalog, mod_info);
+        page.rebuild(paths, mod_catalog, mod_info, is_ce);
         page
     }
 
-    pub fn rebuild(&mut self, paths: &SharedPaths, mod_catalog: &[CatalogEntry], mod_info: &HashMap<String, String>) {
+    /// `is_ce` hides the catalog's "not installed yet, download it" suggestions outside the
+    /// Vanilla/CE campaign - `schemas/catalog.toml`'s own header scopes every entry to "regular
+    /// mods fallout2-ce's own README lists", so they're not guaranteed to even apply to Et
+    /// Tu/Sonora/Nevada. Anything already installed still shows regardless of campaign - this
+    /// only hides unsolicited download offers, never an existing row.
+    pub fn rebuild(
+        &mut self,
+        paths: &SharedPaths,
+        mod_catalog: &[CatalogEntry],
+        mod_info: &HashMap<String, String>,
+        is_ce: bool,
+    ) {
         self.rows.clear();
         let mut seen = HashSet::new();
 
@@ -101,7 +117,7 @@ impl ModsPage {
         }
 
         for entry in mod_catalog {
-            if entry.is_installed(paths) {
+            if !is_ce || entry.is_installed(paths) {
                 continue;
             }
             self.rows.push(ModRow {
@@ -130,8 +146,14 @@ impl ModsPage {
 
     /// Discard in-memory reordering/toggling by re-reading from disk - `mods_order.txt`
     /// itself is the only source of truth, so "revert" and "rebuild" are the same thing.
-    pub fn revert(&mut self, paths: &SharedPaths, mod_catalog: &[CatalogEntry], mod_info: &HashMap<String, String>) {
-        self.rebuild(paths, mod_catalog, mod_info);
+    pub fn revert(
+        &mut self,
+        paths: &SharedPaths,
+        mod_catalog: &[CatalogEntry],
+        mod_info: &HashMap<String, String>,
+        is_ce: bool,
+    ) {
+        self.rebuild(paths, mod_catalog, mod_info, is_ce);
     }
 
     pub fn save(&mut self, paths: &SharedPaths) -> Result<(), String> {
