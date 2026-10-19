@@ -42,7 +42,7 @@ fn install_fn(id: &'static str) -> fn(&crate::backend::paths::Paths) -> Result<(
 }
 
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
-    ui.label(egui::RichText::new("Campaigns").size(17.0).strong().color(theme::STRONG_TEXT));
+    ui.label(theme::bold("Campaigns").size(17.0).color(theme::STRONG_TEXT));
     ui.label(
         egui::RichText::new(
             "Pick what you're playing. Switching reloads this launcher's settings, mods and saves \

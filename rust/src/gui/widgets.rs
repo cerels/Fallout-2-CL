@@ -20,7 +20,7 @@ pub fn card(ui: &mut egui::Ui, title: &str, add_contents: impl FnOnce(&mut egui:
         .corner_radius(14.0)
         .inner_margin(egui::Margin { left: 16, right: 16, top: 12, bottom: 12 })
         .show(ui, |ui| {
-            ui.label(egui::RichText::new(title.to_uppercase()).color(theme::ACCENT).strong().size(12.5));
+            ui.label(theme::bold(title.to_uppercase()).color(theme::ACCENT).size(12.5));
             ui.add_space(6.0);
             add_contents(ui);
         });
@@ -101,7 +101,7 @@ pub fn setting_row(ui: &mut egui::Ui, s: &Setting, store: &mut Store, capturing:
             ui,
             |ui| {
                 ui.vertical(|ui| {
-                    ui.label(egui::RichText::new(&s.label).color(theme::STRONG_TEXT).strong());
+                    ui.label(theme::bold(&s.label).color(theme::STRONG_TEXT));
                     if !s.help.is_empty() {
                         ui.label(egui::RichText::new(&s.help).color(theme::MUTED).small());
                     }

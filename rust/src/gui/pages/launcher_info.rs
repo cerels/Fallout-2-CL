@@ -13,7 +13,7 @@ use crate::gui::theme;
 use crate::gui::widgets::card;
 
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
-    ui.label(egui::RichText::new("Launcher").size(17.0).strong().color(theme::STRONG_TEXT));
+    ui.label(theme::bold("Launcher").size(17.0).color(theme::STRONG_TEXT));
     ui.add_space(8.0);
 
     let launcher_page = app.store.catalog.pages.iter().find(|p| p.name == "Launcher").cloned();

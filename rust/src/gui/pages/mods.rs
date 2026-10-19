@@ -171,7 +171,7 @@ fn encode_latin1(s: &str) -> Vec<u8> {
 /// `ModsPage`) because downloading/deleting a mod spawns a background job and can trigger a
 /// full page reload - both live on `App`.
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
-    ui.label(egui::RichText::new("Mods").size(17.0).strong().color(theme::STRONG_TEXT));
+    ui.label(theme::bold("Mods").size(17.0).color(theme::STRONG_TEXT));
     ui.label(
         egui::RichText::new(
             "Tick to enable, use Move up/down to reorder. Mods lower in the list override the ones \
@@ -236,7 +236,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
                 ui.vertical(|ui| {
                     let title = row.entry.as_ref().map(|e| e.name.clone()).unwrap_or_else(|| row.dat.clone());
-                    ui.label(egui::RichText::new(title).strong().color(theme::STRONG_TEXT));
+                    ui.label(theme::bold(&title).color(theme::STRONG_TEXT));
                     if !row.subtitle.is_empty() {
                         ui.label(egui::RichText::new(&row.subtitle).color(theme::MUTED).small());
                     }

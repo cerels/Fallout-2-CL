@@ -13,7 +13,7 @@ use crate::gui::widgets::card;
 const RPU_HOMEPAGE: &str = "https://github.com/BGforgeNet/Fallout2_Restoration_Project";
 
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
-    ui.label(egui::RichText::new("Restoration Project").size(17.0).strong().color(theme::STRONG_TEXT));
+    ui.label(theme::bold("Restoration Project").size(17.0).color(theme::STRONG_TEXT));
     ui.add_space(8.0);
 
     let installed = is_installed(&app.paths);

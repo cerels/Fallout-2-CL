@@ -90,7 +90,7 @@ impl PlayPage {
                 ui.vertical(|ui| {
                     match &selected {
                         Some(save) => {
-                            ui.label(egui::RichText::new(&save.name).size(16.0).strong().color(theme::STRONG_TEXT));
+                            ui.label(theme::bold(&save.name).size(16.0).color(theme::STRONG_TEXT));
                             ui.label(egui::RichText::new(&save.location).color(theme::ACCENT));
                             if !save.description.is_empty() {
                                 ui.label(
@@ -109,9 +109,7 @@ impl PlayPage {
                             );
                         }
                         None => {
-                            ui.label(
-                                egui::RichText::new("Main menu").size(16.0).strong().color(theme::STRONG_TEXT),
-                            );
+                            ui.label(theme::bold("Main menu").size(16.0).color(theme::STRONG_TEXT));
                             ui.label(
                                 egui::RichText::new("Start a new game, load a save, or change options in-game.")
                                     .color(theme::MUTED),
@@ -196,11 +194,7 @@ fn save_card(
                     ui.allocate_exact_size(egui::vec2(PREVIEW_W as f32, PREVIEW_H as f32), egui::Sense::hover());
                 ui.painter().rect_filled(rect, 4.0, egui::Color32::from_rgb(0x0a, 0x0f, 0x0b));
             }
-            ui.label(
-                egui::RichText::new(format!("{}  \u{b7} slot {}", save.name, save.slot))
-                    .strong()
-                    .color(theme::STRONG_TEXT),
-            );
+            ui.label(theme::bold(format!("{}  \u{b7} slot {}", save.name, save.slot)).color(theme::STRONG_TEXT));
             let loc = if save.description.is_empty() {
                 save.location.clone()
             } else {

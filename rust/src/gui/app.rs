@@ -438,7 +438,7 @@ impl App {
         ui.horizontal(|ui| {
             let accent = theme::parse_hex(campaign.accent);
             egui::Frame::default().fill(accent).corner_radius(9.0).inner_margin(egui::Margin { left: 6, right: 6, top: 4, bottom: 4 }).show(ui, |ui| {
-                ui.label(egui::RichText::new(campaign.badge).color(egui::Color32::from_rgb(0x06, 0x21, 0x0f)).strong());
+                ui.label(theme::bold(campaign.badge).color(egui::Color32::from_rgb(0x06, 0x21, 0x0f)));
             });
             ui.menu_button(format!("{}  \u{25be}", campaign.name.to_uppercase()), |ui| {
                 for c in CAMPAIGNS {
@@ -517,7 +517,7 @@ impl App {
                 let name = name.clone();
                 let search = self.search.trim().to_lowercase();
                 if let Some(page) = self.store.catalog.pages.iter().find(|p| p.name == name).cloned() {
-                    ui.label(egui::RichText::new(&page.name).size(17.0).strong().color(theme::STRONG_TEXT));
+                    ui.label(theme::bold(&page.name).size(17.0).color(theme::STRONG_TEXT));
                     ui.add_space(8.0);
                     pages::settings::show(ui, &mut self.store, &page.groups, &page.intro, &mut self.capturing_key, &search);
                 }
@@ -530,7 +530,7 @@ impl App {
             let mut open = true;
             egui::Modal::new(egui::Id::unique("error_dialog")).show(ctx, |ui| {
                 ui.set_max_width(420.0);
-                ui.label(egui::RichText::new(title).strong().color(theme::DANGER).size(15.0));
+                ui.label(theme::bold(&title).color(theme::DANGER).size(15.0));
                 ui.add_space(8.0);
                 ui.label(egui::RichText::new(message).color(theme::TEXT));
                 ui.add_space(12.0);
@@ -547,7 +547,7 @@ impl App {
             let mut open = true;
             egui::Modal::new(egui::Id::unique("info_dialog")).show(ctx, |ui| {
                 ui.set_max_width(420.0);
-                ui.label(egui::RichText::new(title).strong().color(theme::ACCENT).size(15.0));
+                ui.label(theme::bold(&title).color(theme::ACCENT).size(15.0));
                 ui.add_space(8.0);
                 ui.label(egui::RichText::new(message).color(theme::TEXT));
                 ui.add_space(12.0);
@@ -566,7 +566,7 @@ impl App {
                 let confirm = self.pending_confirm.as_ref().unwrap();
                 egui::Modal::new(egui::Id::unique("confirm_dialog")).show(ctx, |ui| {
                     ui.set_max_width(420.0);
-                    ui.label(egui::RichText::new(&confirm.title).strong().color(theme::STRONG_TEXT).size(15.0));
+                    ui.label(theme::bold(&confirm.title).color(theme::STRONG_TEXT).size(15.0));
                     ui.add_space(8.0);
                     ui.label(egui::RichText::new(&confirm.message).color(theme::TEXT));
                     ui.add_space(12.0);
