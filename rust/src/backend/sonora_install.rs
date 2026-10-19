@@ -286,6 +286,14 @@ mod tests {
         assert!(!should_skip(&["fission.dat".to_string()]));
     }
 
+    #[test]
+    fn should_skip_nested_platform_zip_lookalike_is_not_skipped() {
+        // The "nested platform engine zip" rule only fires at the top level (`parts.len()
+        // == 1`); a same-named file sitting in a subfolder is an ordinary game file as far
+        // as this check is concerned.
+        assert!(!should_skip(&["mods".to_string(), "fallout-sonora-extra.zip".to_string()]));
+    }
+
     fn build_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
         let mut buf = Vec::new();
         let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
@@ -331,6 +339,34 @@ mod tests {
     }
 
     #[test]
+    fn extract_sonora_release_rejects_an_archive_with_no_folders_besides_the_skipped_ones() {
+        let zip = build_zip(&[("__MACOSX/._x", b"x"), ("BIS_mapper/readme.txt", b"x")]);
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let root = sonora_root(&paths);
+        std::fs::create_dir_all(&root).unwrap();
+        let err = extract_sonora_release(&zip, &paths, &root).unwrap_err();
+        assert!(err.contains("layout has changed"));
+    }
+
+    #[test]
+    fn extract_sonora_release_errors_when_every_file_is_skipped() {
+        // One valid top-level folder, but every file inside it matches a skip rule - there's
+        // nothing left to copy, which should be its own clear error rather than silently
+        // "succeeding" with an empty install.
+        let zip = build_zip(&[
+            ("Fallout-Sonora/fallout-sonora-x64.exe", b"windows binary, superseded"),
+            ("Fallout-Sonora/log_develop.txt", b"dev log"),
+        ]);
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let root = sonora_root(&paths);
+        std::fs::create_dir_all(&root).unwrap();
+        let err = extract_sonora_release(&zip, &paths, &root).unwrap_err();
+        assert!(err.contains("no recognized files found"));
+    }
+
+    #[test]
     fn find_fission_asset_url_matches_by_exact_name() {
         let body = serde_json::json!({
             "assets": [{"name": "fallout-fission-linux-x64.zip", "browser_download_url": "https://x/f.zip"}]
@@ -350,6 +386,22 @@ mod tests {
         assert_eq!(std::fs::read(&out).unwrap(), b"elf bytes");
         use std::os::unix::fs::PermissionsExt;
         assert_ne!(std::fs::metadata(&out).unwrap().permissions().mode() & 0o111, 0);
+    }
+
+    #[test]
+    fn write_fission_binary_errors_cleanly_when_the_named_binary_is_absent() {
+        let zip = build_zip(&[("some-other-file", b"x")]);
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(write_fission_binary(&zip, "fallout-fission-linux-x64", tmp.path()).is_err());
+    }
+
+    #[test]
+    fn fission_asset_for_platform_errors_clearly_on_an_unsupported_cpu() {
+        // FissionAsset isn't Debug/PartialEq (no production changes just for a test), so
+        // match explicitly instead of unwrap_err().
+        if let Err(e) = fission_asset_for_platform() {
+            assert!(e.contains("No native Sonora/FISSION engine build"));
+        }
     }
 
     #[test]
