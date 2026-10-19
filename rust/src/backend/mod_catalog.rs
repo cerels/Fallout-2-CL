@@ -312,6 +312,43 @@ mod tests {
     }
 
     #[test]
+    fn parse_catalog_entry_skips_entries_missing_a_required_field() {
+        let missing_homepage: toml::Value =
+            r#"id = "x"
+               name = "X"
+               dat = ["x.dat"]"#
+                .parse()
+                .unwrap();
+        assert!(parse_catalog_entry(&missing_homepage).is_none());
+
+        let complete: toml::Value =
+            r#"id = "x"
+               name = "X"
+               homepage = "https://example.com"
+               dat = ["x.dat"]"#
+                .parse()
+                .unwrap();
+        assert!(parse_catalog_entry(&complete).is_some());
+    }
+
+    #[test]
+    fn resolve_download_without_github_or_raw_errors_without_any_network_call() {
+        let entry = CatalogEntry {
+            id: "x".into(),
+            name: "X".into(),
+            description: String::new(),
+            homepage: String::new(),
+            dat: vec!["x.dat".into()],
+            github: None,
+            asset: "*.zip".into(),
+            raw: None,
+            ini: None,
+        };
+        let err = resolve_download(&entry).unwrap_err();
+        assert!(err.contains("neither github nor raw"));
+    }
+
+    #[test]
     fn resolve_download_for_a_raw_entry_needs_no_network() {
         let entry = CatalogEntry {
             id: "f2-res".into(),
@@ -373,6 +410,26 @@ mod tests {
     }
 
     #[test]
+    fn extract_mods_from_zip_accepts_backslash_separators_and_mixed_case_mods_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut buf = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let opts = zip::write::SimpleFileOptions::default();
+            // A Windows-built zip can use backslashes, and "Mods" may not be lowercase.
+            writer.start_file("Mods\\sub\\thing.dat", opts).unwrap();
+            writer.write_all(b"nested contents").unwrap();
+            writer.finish().unwrap();
+        }
+
+        extract_mods_from_zip(&buf, tmp.path(), "Something").unwrap();
+        assert_eq!(
+            std::fs::read(tmp.path().join("sub").join("thing.dat")).unwrap(),
+            b"nested contents"
+        );
+    }
+
+    #[test]
     fn extract_mods_from_zip_errors_when_archive_has_no_mods_folder() {
         let mut buf = Vec::new();
         {
@@ -404,6 +461,15 @@ mod tests {
     fn load_catalog_state_missing_file_is_empty() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());
+        assert!(load_catalog_state(&paths).is_empty());
+    }
+
+    #[test]
+    fn load_catalog_state_corrupt_json_is_empty_not_an_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        std::fs::create_dir_all(tmp.path().join("mods")).unwrap();
+        std::fs::write(catalog_state_path(&paths), b"{ this is not json").unwrap();
         assert!(load_catalog_state(&paths).is_empty());
     }
 
@@ -450,6 +516,34 @@ mod tests {
         assert!(!mods.join("npc_armor.dat").exists());
         assert!(!mods.join("npcarmor.ini").exists());
         assert!(mods.join("other.dat").exists());
+
+        let order = std::fs::read_to_string(mods.join("mods_order.txt")).unwrap();
+        assert_eq!(order.trim(), "other.dat");
+    }
+
+    #[test]
+    fn delete_mod_files_matches_order_lines_commented_with_either_char() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let mods = tmp.path().join("mods");
+        std::fs::create_dir_all(&mods).unwrap();
+        std::fs::write(mods.join("mods_order.txt"), "#npc_armor.dat\nother.dat\n").unwrap();
+
+        delete_mod_files(&paths, "npc_armor.dat", &[]);
+
+        let order = std::fs::read_to_string(mods.join("mods_order.txt")).unwrap();
+        assert_eq!(order.trim(), "other.dat");
+    }
+
+    #[test]
+    fn delete_mod_files_is_case_insensitive_on_the_order_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let mods = tmp.path().join("mods");
+        std::fs::create_dir_all(&mods).unwrap();
+        std::fs::write(mods.join("mods_order.txt"), "NPC_Armor.DAT\nother.dat\n").unwrap();
+
+        delete_mod_files(&paths, "npc_armor.dat", &[]);
 
         let order = std::fs::read_to_string(mods.join("mods_order.txt")).unwrap();
         assert_eq!(order.trim(), "other.dat");
