@@ -20,7 +20,7 @@
 //! merges every key it sets into the existing ddraw.ini via `IniFile`, so only the lines
 //! that actually change are touched.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::io::{self, Read};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -69,6 +69,29 @@ pub fn save_rpu_state(paths: &Paths, state: &BTreeMap<String, String>) -> io::Re
 
 pub fn is_installed(paths: &Paths) -> bool {
     paths.mod_installed("rpu.dat")
+}
+
+/// The "officially-tested combination" companion files (NPC Armor, Party Orders, the
+/// Unofficial Patch) that `install_rpu` recorded as having actually extracted this install -
+/// see `docs/adr/0007-rpu-companion-attribution-manifest.md`. Empty before RPU is installed,
+/// or for an install made before this manifest existed (self-healing: populated again the
+/// next time RPU is installed or updated).
+pub fn load_rpu_companions(paths: &Paths) -> Vec<String> {
+    load_rpu_state(paths)
+        .get("companions")
+        .map(|s| s.split(',').filter(|f| !f.is_empty()).map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
+/// Every filename RPU owns and that must never show up as its own row on the Mods page: its
+/// core files, its optional extras, and its recorded companions (see `GLOSSARY.md`'s RPU
+/// entry). Lowercased for case-insensitive matching against files found on disk.
+pub fn owned_file_names(paths: &Paths) -> HashSet<String> {
+    let mut set: HashSet<String> = OPTIONAL_DAT_FILES.iter().map(|s| s.to_lowercase()).collect();
+    set.insert("rpu.dat".to_string());
+    set.insert("rpu.ini".to_string());
+    set.extend(load_rpu_companions(paths).into_iter().map(|s| s.to_lowercase()));
+    set
 }
 
 /// Pick the main release zip (not the separate `*_translations.zip` - this launcher is
@@ -151,13 +174,17 @@ fn apply_rpu_ddraw_settings(paths: &Paths, rpu_ddraw_text: &str) -> Result<(), S
     ini.save().map_err(|e| e.to_string())
 }
 
-/// Extracts the wanted parts of the archive (see `wanted_dest`) and, if present, returns the
-/// bundled top-level ddraw.ini's text for `apply_rpu_ddraw_settings` to merge. Split out from
-/// `install_rpu` so it's testable against a synthetic archive with no network access needed.
-fn extract_rpu_release(archive_bytes: &[u8], paths: &Paths) -> Result<Option<String>, String> {
+/// Extracts the wanted parts of the archive (see `wanted_dest`) and returns the bundled
+/// top-level ddraw.ini's text (if present, for `apply_rpu_ddraw_settings` to merge) along with
+/// every filename written directly under `mods/` - `install_rpu` uses the latter to work out
+/// which of them are companion files it doesn't already know about (see
+/// `docs/adr/0007-rpu-companion-attribution-manifest.md`). Split out from `install_rpu` so
+/// it's testable against a synthetic archive with no network access needed.
+fn extract_rpu_release(archive_bytes: &[u8], paths: &Paths) -> Result<(Option<String>, Vec<String>), String> {
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(archive_bytes)).map_err(|e| e.to_string())?;
     let mut copied = 0;
     let mut rpu_ddraw_text = None;
+    let mut mods_files = Vec::new();
 
     for i in 0..zip.len() {
         let mut file = zip.by_index(i).map_err(|e| e.to_string())?;
@@ -176,6 +203,9 @@ fn extract_rpu_release(archive_bytes: &[u8], paths: &Paths) -> Result<Option<Str
             continue;
         }
         let Some(dest) = wanted_dest(paths, &parts) else { continue };
+        if parts.len() == 2 && parts[0] == "mods" {
+            mods_files.push(parts[1].clone());
+        }
         if let Some(parent) = dest.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
@@ -186,7 +216,7 @@ fn extract_rpu_release(archive_bytes: &[u8], paths: &Paths) -> Result<Option<Str
     if copied == 0 {
         return Err("RPU archive layout has changed - no recognized files found".to_string());
     }
-    Ok(rpu_ddraw_text)
+    Ok((rpu_ddraw_text, mods_files))
 }
 
 fn decode_latin1(bytes: &[u8]) -> String {
@@ -200,23 +230,35 @@ pub fn install_rpu(paths: &Paths) -> Result<(), String> {
     let (url, _filename, version) = resolve_rpu_download()?;
     let bytes = super::http::get_bytes(&url, Duration::from_secs(600))?;
 
-    let rpu_ddraw_text = extract_rpu_release(&bytes, paths)?;
+    let (rpu_ddraw_text, mods_files) = extract_rpu_release(&bytes, paths)?;
     enable_mod_file(paths, "rpu.dat").map_err(|e| e.to_string())?;
     if let Some(text) = rpu_ddraw_text {
         apply_rpu_ddraw_settings(paths, &text)?;
     }
 
+    // Everything the zip wrote under mods/ that isn't RPU's own core or optional-extra files
+    // is, by elimination, a companion mod (NPC Armor, Party Orders, Unofficial Patch) - see
+    // `docs/adr/0007-rpu-companion-attribution-manifest.md` for why this is recorded rather
+    // than hardcoded.
+    let known: HashSet<String> =
+        OPTIONAL_DAT_FILES.iter().map(|s| s.to_lowercase()).chain(["rpu.dat".to_string(), "rpu.ini".to_string()]).collect();
+    let companions: Vec<String> = mods_files.into_iter().filter(|f| !known.contains(&f.to_lowercase())).collect();
+
     let mut state = BTreeMap::new();
     state.insert("version".to_string(), version);
+    state.insert("companions".to_string(), companions.join(","));
     save_rpu_state(paths, &state).map_err(|e| e.to_string())
 }
 
 /// Remove RPU's own mods/ files (not appearance/ or the restored music - just extra data,
-/// harmless to leave, and re-installing overwrites them anyway) and drop rpu.dat from
-/// mods_order.txt.
+/// harmless to leave, and re-installing overwrites them anyway), its recorded companion mods
+/// (NPC Armor, Party Orders, the Unofficial Patch - you only have them because of RPU, see
+/// `docs/adr/0007-rpu-companion-attribution-manifest.md`), and drop all of their mods_order.txt
+/// lines.
 pub fn delete_rpu(paths: &Paths) -> Vec<PathBuf> {
     let mut extra: Vec<String> = OPTIONAL_DAT_FILES.iter().map(|s| s.to_string()).collect();
     extra.push("rpu.ini".to_string());
+    extra.extend(load_rpu_companions(paths));
     let removed = delete_mod_files(paths, "rpu.dat", &extra);
 
     let state_path = rpu_state_path(paths);
@@ -366,13 +408,14 @@ mod tests {
             ("data/sound/music/map.acm", b"music"),
             ("data/art/hero.frm", b"skipped, not sound"),
             ("mods/rpu.dat", b"rpu content"),
+            ("mods/npc_armor.dat", b"companion content"),
             ("mods/mods_order.txt", b"never overwrite this"),
             ("mods/sub/nested.dat", b"skipped, nested"),
         ]);
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());
 
-        let ddraw_text = extract_rpu_release(&zip, &paths).unwrap();
+        let (ddraw_text, mods_files) = extract_rpu_release(&zip, &paths).unwrap();
         assert_eq!(ddraw_text.unwrap(), "[Debugging]\nBoostScriptDialogLimit=10000\n");
         assert_eq!(std::fs::read(tmp.path().join("appearance").join("hero.frm")).unwrap(), b"sprite");
         assert_eq!(
@@ -385,6 +428,12 @@ mod tests {
         assert!(!tmp.path().join("data").join("art").join("hero.frm").exists());
         assert!(!tmp.path().join("mods").join("mods_order.txt").exists());
         assert!(!tmp.path().join("mods").join("sub").exists());
+        // mods_order.txt and the nested file are correctly absent - only flat mods/ files
+        // make it into the "what did we actually write" list `install_rpu` uses for
+        // companion attribution.
+        let mut mods_files = mods_files;
+        mods_files.sort();
+        assert_eq!(mods_files, vec!["npc_armor.dat".to_string(), "rpu.dat".to_string()]);
     }
 
     #[test]
@@ -409,6 +458,37 @@ mod tests {
     }
 
     #[test]
+    fn load_rpu_companions_is_empty_before_rpu_is_installed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        assert!(load_rpu_companions(&paths).is_empty());
+    }
+
+    #[test]
+    fn owned_file_names_always_includes_core_and_optional_extras() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let owned = owned_file_names(&paths);
+        assert!(owned.contains("rpu.dat"));
+        assert!(owned.contains("rpu.ini"));
+        assert!(owned.contains("rpu_extended_flamer.dat"));
+        assert!(!owned.contains("npc_armor.dat"), "companions are only owned once recorded");
+    }
+
+    #[test]
+    fn owned_file_names_includes_recorded_companions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let mut state = BTreeMap::new();
+        state.insert("companions".to_string(), "npc_armor.dat,npcarmor.ini".to_string());
+        save_rpu_state(&paths, &state).unwrap();
+
+        let owned = owned_file_names(&paths);
+        assert!(owned.contains("npc_armor.dat"));
+        assert!(owned.contains("npcarmor.ini"));
+    }
+
+    #[test]
     fn delete_rpu_removes_dat_files_ini_and_state() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());
@@ -428,6 +508,29 @@ mod tests {
         assert!(!mods.join("rpu.ini").exists());
         assert!(!mods.join("rpu_extended_flamer.dat").exists());
         assert!(!rpu_state_path(&paths).exists());
+        assert_eq!(std::fs::read_to_string(mods.join("mods_order.txt")).unwrap().trim(), "");
+    }
+
+    #[test]
+    fn delete_rpu_also_removes_its_recorded_companions_and_their_order_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let mods = tmp.path().join("mods");
+        std::fs::create_dir_all(&mods).unwrap();
+        std::fs::write(mods.join("rpu.dat"), b"x").unwrap();
+        std::fs::write(mods.join("npc_armor.dat"), b"x").unwrap();
+        std::fs::write(mods.join("npcarmor.ini"), b"x").unwrap();
+        // The player ticked the "enable" checkbox for the companion at some point, so it
+        // picked up its own mods_order.txt line, same as any regular mod would.
+        std::fs::write(mods.join("mods_order.txt"), "rpu.dat\nnpc_armor.dat\n").unwrap();
+        let mut state = BTreeMap::new();
+        state.insert("version".to_string(), "v1".to_string());
+        state.insert("companions".to_string(), "npc_armor.dat,npcarmor.ini".to_string());
+        save_rpu_state(&paths, &state).unwrap();
+
+        delete_rpu(&paths);
+        assert!(!mods.join("npc_armor.dat").exists());
+        assert!(!mods.join("npcarmor.ini").exists());
         assert_eq!(std::fs::read_to_string(mods.join("mods_order.txt")).unwrap().trim(), "");
     }
 }

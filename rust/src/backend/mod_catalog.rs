@@ -232,7 +232,9 @@ fn extract_mods_from_zip(bytes: &[u8], mods_dir: &Path, entry_name: &str) -> Res
 }
 
 /// Remove `dat_name` (and any `extra` files, e.g. its `.ini`) from `mods/`, and drop
-/// `dat_name`'s line from `mods_order.txt` entirely. Returns the paths removed.
+/// `dat_name`'s line from `mods_order.txt`, along with any of `extra`'s own lines (an `.ini`
+/// sidecar never has one, but a caller like `rpu_install::delete_rpu` passes other `.dat`
+/// files that can). Returns the paths removed.
 pub fn delete_mod_files(paths: &Paths, dat_name: &str, extra: &[String]) -> Vec<PathBuf> {
     let mut removed = Vec::new();
     for rel in std::iter::once(dat_name).chain(extra.iter().map(String::as_str)) {
@@ -247,7 +249,7 @@ pub fn delete_mod_files(paths: &Paths, dat_name: &str, extra: &[String]) -> Vec<
         let lines = super::ini_file::split_lines(&decode_latin1(&raw));
         let kept: Vec<String> = lines
             .iter()
-            .filter(|ln| !matches_mod_line(ln, dat_name))
+            .filter(|ln| !matches_mod_line(ln, dat_name) && !extra.iter().any(|e| matches_mod_line(ln, e)))
             .cloned()
             .collect();
         if kept != lines {
@@ -530,6 +532,23 @@ mod tests {
         std::fs::write(mods.join("mods_order.txt"), "#npc_armor.dat\nother.dat\n").unwrap();
 
         delete_mod_files(&paths, "npc_armor.dat", &[]);
+
+        let order = std::fs::read_to_string(mods.join("mods_order.txt")).unwrap();
+        assert_eq!(order.trim(), "other.dat");
+    }
+
+    #[test]
+    fn delete_mod_files_also_drops_order_lines_for_extra_dat_files() {
+        // A regular mod's `extra` is just its `.ini` sidecar, which never has its own order
+        // line - but rpu_install::delete_rpu passes other `.dat` files as `extra` too, and
+        // those can, if the player had enabled them independently.
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let mods = tmp.path().join("mods");
+        std::fs::create_dir_all(&mods).unwrap();
+        std::fs::write(mods.join("mods_order.txt"), "rpu.dat\nnpc_armor.dat\nother.dat\n").unwrap();
+
+        delete_mod_files(&paths, "rpu.dat", &["npc_armor.dat".to_string()]);
 
         let order = std::fs::read_to_string(mods.join("mods_order.txt")).unwrap();
         assert_eq!(order.trim(), "other.dat");
