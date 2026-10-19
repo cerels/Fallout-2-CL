@@ -146,13 +146,26 @@ fn find_fission_asset_url(body: &serde_json::Value, asset_name: &str) -> Result<
         .ok_or_else(|| format!("No {asset_name} asset found in the latest FISSION release."))
 }
 
-/// Fetch a native engine binary for this platform from `FISSION_REPO`'s latest release and
-/// place it in `root`, under the name `campaigns.rs` expects to find.
+/// `FISSION_REPO` only ever publishes beta/prerelease tags (never a plain "latest" release),
+/// so `/releases/latest` - which GitHub's API explicitly excludes prereleases from - 404s
+/// every time. `/releases` (the list endpoint) includes prereleases and is already sorted
+/// newest-published-first, so its first entry is the one we want. Split out from
+/// `fetch_fission_binary` so it's testable against a canned JSON response, with no network
+/// access needed.
+fn resolve_latest_fission_release(body: &serde_json::Value) -> Result<&serde_json::Value, String> {
+    body.as_array()
+        .and_then(|releases| releases.first())
+        .ok_or_else(|| "No FISSION releases found.".to_string())
+}
+
+/// Fetch a native engine binary for this platform from `FISSION_REPO`'s latest (pre)release
+/// and place it in `root`, under the name `campaigns.rs` expects to find.
 fn fetch_fission_binary(root: &Path) -> Result<(), String> {
     let asset = fission_asset_for_platform()?;
-    let api_url = format!("https://api.github.com/repos/{FISSION_REPO}/releases/latest");
+    let api_url = format!("https://api.github.com/repos/{FISSION_REPO}/releases");
     let body = super::http::get_json(&api_url, Duration::from_secs(20))?;
-    let asset_url = find_fission_asset_url(&body, asset.archive_name)?;
+    let release = resolve_latest_fission_release(&body)?;
+    let asset_url = find_fission_asset_url(release, asset.archive_name)?;
     let bytes = super::http::get_bytes(&asset_url, Duration::from_secs(120))?;
     write_fission_binary(&bytes, asset.bin_name, root)
 }
@@ -365,6 +378,25 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         let err = extract_sonora_release(&zip, &paths, &root).unwrap_err();
         assert!(err.contains("no recognized files found"));
+    }
+
+    #[test]
+    fn resolve_latest_fission_release_picks_the_first_entry_even_though_its_a_prerelease() {
+        // FISSION_REPO only ever ships beta tags - this must work from the /releases list
+        // (which includes prereleases), not assume a "latest" (non-prerelease) release
+        // exists at all.
+        let body = serde_json::json!([
+            {"tag_name": "beta-0.9.7.10", "prerelease": true, "assets": []},
+            {"tag_name": "beta-0.9.7.9", "prerelease": true, "assets": []},
+        ]);
+        let release = resolve_latest_fission_release(&body).unwrap();
+        assert_eq!(release.get("tag_name").and_then(|v| v.as_str()), Some("beta-0.9.7.10"));
+    }
+
+    #[test]
+    fn resolve_latest_fission_release_errors_cleanly_on_an_empty_list() {
+        let body = serde_json::json!([]);
+        assert!(resolve_latest_fission_release(&body).is_err());
     }
 
     #[test]
