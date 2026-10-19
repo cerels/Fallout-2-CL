@@ -17,6 +17,13 @@ use backend::ini_file::IniFile;
 use backend::launch::{exec_game, game_args, launcher_prefs};
 use backend::paths::Paths;
 
+/// Pre-cropped, background-removed Vault Boy-on-a-nuke art, baked in as raw RGBA at build
+/// time (not a PNG) so the window icon doesn't need an image-decoding dependency.
+fn app_icon() -> egui::IconData {
+    const RGBA: &[u8] = include_bytes!("../assets/icon/vaultboy-nuke-256.rgba");
+    egui::IconData { rgba: RGBA.to_vec(), width: 256, height: 256 }
+}
+
 fn main() -> eframe::Result {
     let paths = Paths::from_current_exe();
     let argv: Vec<String> = std::env::args().collect();
@@ -53,7 +60,8 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1180.0, 820.0])
             .with_min_inner_size([900.0, 600.0])
-            .with_title("Fallout 2 Launcher"),
+            .with_title("Fallout 2 Launcher")
+            .with_icon(app_icon()),
         ..Default::default()
     };
 
