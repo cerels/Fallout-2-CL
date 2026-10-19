@@ -1,42 +1,54 @@
-//! Pip-Boy-inspired visual theme: dark background, phosphor-green accents, amber as the
-//! "something needs attention" color - see `docs/adr/0004-rust-rewrite.md` ("modern layout
-//! and spacing, amber/green CRT accents kept subtle rather than kitschy"). Plain
-//! `egui::Visuals` field tweaks (plus two embedded font weights), no extra theme crate: the
-//! simplest thing that works (`docs/adr/0005-boring-rust.md`).
+//! Terminal-skin visual theme (ADR 0008): heavy true-dark backgrounds, a per-campaign accent
+//! that re-tints the active state/selection/hyperlink/button colors, and a small fixed set of
+//! semantic colors (danger/warning/success) that stay put regardless of which campaign is
+//! active - see `docs/terminal-ui-blueprint.md` for the full token table. Plain `egui::Visuals`
+//! field tweaks (plus two embedded font families), no extra theme crate: the simplest thing
+//! that works (`docs/adr/0005-boring-rust.md`).
 
 use std::sync::Arc;
 
 use eframe::egui;
 
-/// Inter Regular and Bold (SIL Open Font License 1.1 - `assets/fonts/Inter-LICENSE.txt`),
-/// swapped in for egui's own default proportional font. Only these two static weights are
-/// embedded (not the full variable font or every static weight) to keep the binary small.
+/// Inter Regular and Bold (SIL Open Font License 1.1 - `assets/fonts/Inter-LICENSE.txt`), used
+/// for dense body/help text where a monospace face would hurt scanability for no aesthetic
+/// gain (`docs/terminal-ui-blueprint.md` \u{a7}1).
 const INTER_REGULAR: &[u8] = include_bytes!("../../assets/fonts/Inter-Regular.ttf");
 const INTER_BOLD: &[u8] = include_bytes!("../../assets/fonts/Inter-Bold.ttf");
 
-/// Name of the bold `FontFamily` registered in `build_fonts` - use `theme::bold()` to get a
-/// `RichText` in this family rather than naming it directly at call sites.
+/// IBM Plex Mono Regular and Bold (SIL Open Font License 1.1 -
+/// `assets/fonts/IBMPlexMono-LICENSE.txt`), used for structural chrome: nav labels, the status
+/// bar, headers, button text, numeric/key readouts.
+const PLEX_MONO_REGULAR: &[u8] = include_bytes!("../../assets/fonts/IBMPlexMono-Regular.ttf");
+const PLEX_MONO_BOLD: &[u8] = include_bytes!("../../assets/fonts/IBMPlexMono-Bold.ttf");
+
+/// Names of the bold `FontFamily`s registered in `build_fonts` - use `theme::bold()`/
+/// `theme::mono_bold()` to get a `RichText` in one of these rather than naming it directly at
+/// call sites.
 const INTER_BOLD_FAMILY: &str = "Inter-Bold";
+const PLEX_MONO_BOLD_FAMILY: &str = "PlexMono-Bold";
 
+/// Fallback accent, and the value `parse_hex` returns if a campaign's accent hex is ever
+/// malformed. Not "the" accent any more - see `accent()` - but still a sane default.
 pub const ACCENT: egui::Color32 = egui::Color32::from_rgb(0x5d, 0xfc, 0x8a);
-pub const AMBER: egui::Color32 = egui::Color32::from_rgb(0xff, 0xb8, 0x4d);
-pub const DANGER: egui::Color32 = egui::Color32::from_rgb(0xff, 0x5c, 0x5c);
-pub const MUTED: egui::Color32 = egui::Color32::from_rgb(0x86, 0xa3, 0x8b);
-pub const TEXT: egui::Color32 = egui::Color32::from_rgb(0xd4, 0xec, 0xd6);
-pub const STRONG_TEXT: egui::Color32 = egui::Color32::from_rgb(0xe8, 0xf7, 0xea);
+pub const AMBER: egui::Color32 = egui::Color32::from_rgb(0xff, 0xd2, 0x3f);
+pub const DANGER: egui::Color32 = egui::Color32::from_rgb(0xff, 0x3b, 0x5c);
+pub const SUCCESS: egui::Color32 = egui::Color32::from_rgb(0x2d, 0xe8, 0xc0);
+pub const MUTED: egui::Color32 = egui::Color32::from_rgb(0x8f, 0xa3, 0x94);
+pub const TEXT: egui::Color32 = egui::Color32::from_rgb(0xea, 0xf2, 0xec);
+pub const STRONG_TEXT: egui::Color32 = egui::Color32::from_rgb(0xf4, 0xfa, 0xf5);
 
-const BG: egui::Color32 = egui::Color32::from_rgb(0x0c, 0x11, 0x0d);
-const PANEL_BG: egui::Color32 = egui::Color32::from_rgb(0x10, 0x18, 0x12);
-const CARD_BG: egui::Color32 = egui::Color32::from_rgb(0x13, 0x1c, 0x15);
-const EXTREME_BG: egui::Color32 = egui::Color32::from_rgb(0x0f, 0x17, 0x11);
-const STROKE: egui::Color32 = egui::Color32::from_rgb(0x2a, 0x45, 0x30);
-const INACTIVE_BG: egui::Color32 = egui::Color32::from_rgb(0x18, 0x26, 0x1b);
-const HOVER_BG: egui::Color32 = egui::Color32::from_rgb(0x1f, 0x33, 0x24);
-const HOVER_STROKE: egui::Color32 = egui::Color32::from_rgb(0x3d, 0x6a, 0x47);
-const DARK_FG: egui::Color32 = egui::Color32::from_rgb(0x06, 0x21, 0x0f);
+const BG: egui::Color32 = egui::Color32::from_rgb(0x0a, 0x0b, 0x0a);
+const PANEL_BG: egui::Color32 = egui::Color32::from_rgb(0x12, 0x14, 0x12);
+const CARD_BG: egui::Color32 = egui::Color32::from_rgb(0x14, 0x17, 0x14);
+const EXTREME_BG: egui::Color32 = egui::Color32::from_rgb(0x06, 0x07, 0x06);
+const STROKE: egui::Color32 = egui::Color32::from_rgb(0x2a, 0x33, 0x2c);
+const INACTIVE_BG: egui::Color32 = egui::Color32::from_rgb(0x18, 0x1e, 0x19);
+const HOVER_BG: egui::Color32 = egui::Color32::from_rgb(0x1f, 0x29, 0x21);
+const HOVER_STROKE: egui::Color32 = egui::Color32::from_rgb(0x3d, 0x52, 0x40);
+const DARK_FG: egui::Color32 = egui::Color32::from_rgb(0x10, 0x12, 0x10);
 
-/// `CARD_BG`/`STROKE` aren't exported as constants - only `widgets::card` needs them
-/// directly, so they're reached through these two functions instead.
+/// `CARD_BG`/`STROKE`/`PANEL_BG` aren't exported as constants - only a few call sites outside
+/// this module need them directly, so they're reached through these functions instead.
 pub(super) fn card_bg() -> egui::Color32 {
     CARD_BG
 }
@@ -45,13 +57,20 @@ pub(super) fn stroke_color() -> egui::Color32 {
     STROKE
 }
 
-/// Apply the theme once, right after the `eframe::App` is created. This app is always dark
-/// (a Pip-Boy doesn't have a light mode), so the system theme preference is overridden
-/// outright rather than maintaining a separate light palette nobody will ever see.
-pub fn install(ctx: &egui::Context) {
+pub(super) fn bg_panel() -> egui::Color32 {
+    PANEL_BG
+}
+
+/// Apply the theme, keyed to `accent` (the active campaign's color). Called once at startup
+/// and again on every campaign switch (`App::switch_campaign`) - re-running the whole thing
+/// rather than keeping a separate "just update the accent" path is simpler to reason about
+/// (`docs/adr/0005-boring-rust.md`), and a campaign switch is rare enough that redoing the
+/// font/spacing setup costs nothing noticeable. This app is always dark (a terminal doesn't
+/// have a light mode), so the system theme preference is overridden outright.
+pub fn install(ctx: &egui::Context, accent: egui::Color32) {
     ctx.set_theme(egui::ThemePreference::Dark);
     ctx.set_fonts(build_fonts());
-    let visuals = build_visuals();
+    let visuals = build_visuals(accent);
     ctx.all_styles_mut(|style| {
         style.visuals = visuals.clone();
         style.spacing.item_spacing = egui::vec2(10.0, 10.0);
@@ -59,28 +78,49 @@ pub fn install(ctx: &egui::Context) {
     });
 }
 
-/// Put Inter ahead of egui's bundled default so every proportional-text widget picks it up
-/// automatically; the default stays right behind it as a fallback for any glyph Inter
-/// doesn't cover. Inter Bold is registered as its own named family (`bold_family_id()`)
-/// rather than replacing `Proportional`, so regular text is unaffected and only call sites
-/// that ask for it (via `theme::bold()`) render bold.
+/// The active accent anywhere a `Ui` is in scope - reads back the same color `install` just
+/// set on `visuals.selection.stroke`, rather than threading a campaign/accent parameter through
+/// every card/button/toggle that wants to re-tint with it.
+pub fn accent(ui: &egui::Ui) -> egui::Color32 {
+    ui.visuals().selection.stroke.color
+}
+
+/// Put Inter ahead of egui's bundled default proportional font, and Plex Mono ahead of egui's
+/// bundled default monospace font, so every `.monospace()` call (key-capture buttons, etc.)
+/// picks up Plex Mono automatically. The originals stay right behind as fallbacks for any glyph
+/// the new fonts don't cover. Both bold weights are registered as their own named families
+/// (`bold_family_id()`/`plex_mono_bold_family_id()`) rather than replacing the family outright,
+/// so regular text is unaffected and only call sites that ask for it (`theme::bold()`/
+/// `theme::mono_bold()`) render bold.
 fn build_fonts() -> egui::FontDefinitions {
     let mut fonts = egui::FontDefinitions::default();
     fonts.font_data.insert("Inter".to_owned(), Arc::new(egui::FontData::from_static(INTER_REGULAR)));
     fonts.font_data.insert("Inter-Bold".to_owned(), Arc::new(egui::FontData::from_static(INTER_BOLD)));
+    fonts.font_data.insert("PlexMono".to_owned(), Arc::new(egui::FontData::from_static(PLEX_MONO_REGULAR)));
+    fonts.font_data.insert("PlexMono-Bold".to_owned(), Arc::new(egui::FontData::from_static(PLEX_MONO_BOLD)));
+
     fonts.families.entry(egui::FontFamily::Proportional).or_default().insert(0, "Inter".to_owned());
-    // Fall back to Inter Regular and then egui's default for any glyph Inter Bold doesn't
-    // cover, same fallback shape as the Proportional family above.
+    fonts.families.entry(egui::FontFamily::Monospace).or_default().insert(0, "PlexMono".to_owned());
+
     let proportional_fallbacks = fonts.families.get(&egui::FontFamily::Proportional).cloned().unwrap_or_default();
     let mut bold_family = vec!["Inter-Bold".to_owned()];
     bold_family.extend(proportional_fallbacks);
     fonts.families.insert(bold_family_id(), bold_family);
+
+    let monospace_fallbacks = fonts.families.get(&egui::FontFamily::Monospace).cloned().unwrap_or_default();
+    let mut mono_bold_family = vec!["PlexMono-Bold".to_owned()];
+    mono_bold_family.extend(monospace_fallbacks);
+    fonts.families.insert(plex_mono_bold_family_id(), mono_bold_family);
+
     fonts
 }
 
-/// The `FontFamily` that renders in Inter Bold - see `bold()`.
 fn bold_family_id() -> egui::FontFamily {
     egui::FontFamily::Name(INTER_BOLD_FAMILY.into())
+}
+
+fn plex_mono_bold_family_id() -> egui::FontFamily {
+    egui::FontFamily::Name(PLEX_MONO_BOLD_FAMILY.into())
 }
 
 /// A `RichText` in Inter Bold with the usual "strong" color baked in - the bold counterpart
@@ -90,7 +130,21 @@ pub fn bold(text: impl AsRef<str>) -> egui::RichText {
     egui::RichText::new(text.as_ref().to_string()).strong().family(bold_family_id())
 }
 
-fn build_visuals() -> egui::Visuals {
+/// A `RichText` in Plex Mono Regular - structural/chrome text (nav labels, status bar,
+/// headers, bracket sigils). Plain `.monospace()` already resolves to Plex Mono since
+/// `build_fonts` puts it first in the `Monospace` family, but this name is the chrome-text
+/// counterpart to `bold()`/`mono_bold()` for call sites that want to say what they mean.
+pub fn mono(text: impl AsRef<str>) -> egui::RichText {
+    egui::RichText::new(text.as_ref().to_string()).monospace()
+}
+
+/// A `RichText` in Plex Mono Bold - the mono counterpart to `bold()`, for chrome text that
+/// needs both (nav section headers, the LAUNCH button, status bar readouts).
+pub fn mono_bold(text: impl AsRef<str>) -> egui::RichText {
+    egui::RichText::new(text.as_ref().to_string()).strong().family(plex_mono_bold_family_id())
+}
+
+fn build_visuals(accent: egui::Color32) -> egui::Visuals {
     let mut visuals = egui::Visuals::dark();
     visuals.override_text_color = Some(TEXT);
     visuals.window_fill = BG;
@@ -98,7 +152,7 @@ fn build_visuals() -> egui::Visuals {
     visuals.faint_bg_color = CARD_BG;
     visuals.extreme_bg_color = EXTREME_BG;
     visuals.code_bg_color = EXTREME_BG;
-    visuals.hyperlink_color = ACCENT;
+    visuals.hyperlink_color = accent;
     visuals.warn_fg_color = AMBER;
     visuals.error_fg_color = DANGER;
     visuals.window_stroke = egui::Stroke::new(1.0, STROKE);
@@ -118,14 +172,16 @@ fn build_visuals() -> egui::Visuals {
     w.hovered.fg_stroke = egui::Stroke::new(1.0, STRONG_TEXT);
     w.active.bg_fill = HOVER_BG;
     w.active.weak_bg_fill = HOVER_BG;
-    w.active.bg_stroke = egui::Stroke::new(1.0, ACCENT);
-    w.active.fg_stroke = egui::Stroke::new(1.0, ACCENT);
+    w.active.bg_stroke = egui::Stroke::new(1.0, accent);
+    w.active.fg_stroke = egui::Stroke::new(1.0, accent);
     w.open.bg_fill = INACTIVE_BG;
     w.open.weak_bg_fill = INACTIVE_BG;
     w.open.bg_stroke = egui::Stroke::new(1.0, HOVER_STROKE);
 
-    visuals.selection.bg_fill = egui::Color32::from_rgb(0x1c, 0x33, 0x22);
-    visuals.selection.stroke = egui::Stroke::new(1.0, ACCENT);
+    // A translucent wash of the accent itself, so text selection highlighting re-tints along
+    // with everything else rather than staying a fixed, campaign-independent green.
+    visuals.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 40);
+    visuals.selection.stroke = egui::Stroke::new(1.0, accent);
 
     // Softer/more modern than the sharp-ish corners this started with - still short of
     // "bubbly". Windows/menus round the most since they're the biggest shapes on screen.
@@ -142,9 +198,9 @@ fn build_visuals() -> egui::Visuals {
 }
 
 /// Parse a `"#rrggbb"` string (the `Campaign::accent` fields in `backend::campaigns`) into a
-/// `Color32`, falling back to the theme's own accent if it's ever malformed - there's no
-/// hex-color parser in scope at runtime otherwise (`egui::hex_color!` only works on string
-/// literals known at compile time).
+/// `Color32`, falling back to `ACCENT` if it's ever malformed - there's no hex-color parser in
+/// scope at runtime otherwise (`egui::hex_color!` only works on string literals known at
+/// compile time).
 pub fn parse_hex(hex: &str) -> egui::Color32 {
     let h = hex.trim_start_matches('#');
     let parsed = (h.len() == 6).then(|| {
@@ -154,14 +210,10 @@ pub fn parse_hex(hex: &str) -> egui::Color32 {
     parsed.flatten().unwrap_or(ACCENT)
 }
 
-/// A button styled as the one unmissable "primary" action (Play / Install), echoing the old
-/// Qt build's `#primary` button. `warn` swaps it from green to amber - "needs attention
-/// first" (install-needed, pending update, ...).
-pub fn primary_button(text: impl Into<egui::WidgetText>, warn: bool) -> egui::Button<'static> {
-    let (bg, fg) = if warn {
-        (AMBER, egui::Color32::from_rgb(0x2a, 0x18, 0x00))
-    } else {
-        (ACCENT, DARK_FG)
-    };
-    egui::Button::new(bold(text.into().text()).color(fg)).fill(bg).corner_radius(10.0)
+/// A button styled as the one unmissable "primary" action (Play / Install / Launch), echoing
+/// the old Qt build's `#primary` button. `warn` swaps it from the campaign accent to amber -
+/// "needs attention first" (install-needed, pending update, ...).
+pub fn primary_button(text: impl Into<egui::WidgetText>, warn: bool, accent: egui::Color32) -> egui::Button<'static> {
+    let bg = if warn { AMBER } else { accent };
+    egui::Button::new(mono_bold(text.into().text()).color(DARK_FG)).fill(bg).corner_radius(10.0)
 }

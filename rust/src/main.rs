@@ -72,12 +72,13 @@ fn main() -> eframe::Result {
     let launch_result = Rc::new(RefCell::new(None));
     let launch_result_for_app = launch_result.clone();
     let paths_for_app = paths.clone();
+    let initial_accent = gui::theme::parse_hex(campaign.accent);
 
     eframe::run_native(
         "Fallout 2 Launcher",
         options,
         Box::new(move |cc| {
-            gui::theme::install(&cc.egui_ctx);
+            gui::theme::install(&cc.egui_ctx, initial_accent);
             Ok(Box::new(gui::App::new(paths_for_app, launch_result_for_app)))
         }),
     )?;
