@@ -188,6 +188,64 @@ mod tests {
     }
 
     #[test]
+    fn ci_path_resolves_case_mismatch_at_every_level() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("Mods").join("NpcArmor")).unwrap();
+        std::fs::write(tmp.path().join("Mods").join("NpcArmor").join("Data.DAT"), b"").unwrap();
+        let paths = paths_in(tmp.path());
+
+        let resolved = paths.ci_path("mods/npcarmor/data.dat", None);
+        assert_eq!(resolved, tmp.path().join("Mods").join("NpcArmor").join("Data.DAT"));
+    }
+
+    #[test]
+    fn ci_path_handles_unicode_filenames_case_insensitively() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("CAFÉ.cfg"), b"").unwrap();
+        let paths = paths_in(tmp.path());
+
+        assert_eq!(paths.ci_path("café.cfg", None), tmp.path().join("CAFÉ.cfg"));
+    }
+
+    #[test]
+    fn ci_path_nonexistent_path_returns_best_effort_join() {
+        // Neither Python nor Rust special-case a totally missing path: ci_path just
+        // returns the naive join when nothing on disk matches at any level.
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = paths_in(tmp.path());
+
+        let resolved = paths.ci_path("mods/missing/thing.dat", None);
+        assert_eq!(resolved, tmp.path().join("mods").join("missing").join("thing.dat"));
+    }
+
+    #[test]
+    fn ci_path_accepts_backslash_separators() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("Mods")).unwrap();
+        std::fs::write(tmp.path().join("Mods").join("Thing.dat"), b"").unwrap();
+        let paths = paths_in(tmp.path());
+
+        assert_eq!(
+            paths.ci_path("mods\\thing.dat", None),
+            tmp.path().join("Mods").join("Thing.dat")
+        );
+    }
+
+    #[test]
+    fn ci_path_honors_explicit_root_override() {
+        let tmp = tempfile::tempdir().unwrap();
+        let other_root = tmp.path().join("Other");
+        std::fs::create_dir_all(&other_root).unwrap();
+        std::fs::write(other_root.join("File.txt"), b"").unwrap();
+        let paths = paths_in(tmp.path());
+
+        // game_dir() is still tmp.path() here, so passing `other_root` as an explicit
+        // root must take priority over the active campaign root.
+        let resolved = paths.ci_path("file.txt", Some(&other_root));
+        assert_eq!(resolved, other_root.join("File.txt"));
+    }
+
+    #[test]
     fn ci_path_is_exact_when_case_already_matches() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("fallout2.cfg"), b"").unwrap();

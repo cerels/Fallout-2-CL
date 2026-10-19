@@ -258,6 +258,65 @@ mod tests {
     }
 
     #[test]
+    fn get_returns_first_occurrence_of_a_duplicated_key() {
+        let (_tmp, ini) = ini_with("[Display]\nWindowed=1\nWindowed=2\n");
+        assert_eq!(ini.get("Display", "Windowed"), Some("1".to_string()));
+    }
+
+    #[test]
+    fn set_on_duplicated_key_rewrites_only_the_first_occurrence() {
+        let (_tmp, mut ini) = ini_with("[Display]\nWindowed=1\nWindowed=2\n");
+        ini.set("Display", "Windowed", "9");
+        assert_eq!(ini.lines, vec!["[Display]", "Windowed=9", "Windowed=2"]);
+    }
+
+    #[test]
+    fn repeated_section_header_only_extends_the_first_occurrence() {
+        // A second "[Display]" header further down starts a *new*, unrelated section as
+        // far as find() is concerned - it stops scanning at the first header it hits after
+        // the matched section, rather than treating same-named sections as one.
+        let (_tmp, mut ini) = ini_with("[Display]\nWindowed=1\n[Audio]\nVolume=5\n[Display]\nScale=2\n");
+        ini.set("Display", "Gamma", "1");
+        assert_eq!(
+            ini.lines,
+            vec![
+                "[Display]", "Windowed=1", "Gamma=1", "[Audio]", "Volume=5", "[Display]", "Scale=2"
+            ]
+        );
+    }
+
+    #[test]
+    fn set_matches_existing_section_regardless_of_case() {
+        let (_tmp, mut ini) = ini_with("[DISPLAY]\nWindowed=1\n");
+        ini.set("display", "Scale", "2");
+        assert_eq!(ini.lines, vec!["[DISPLAY]", "Windowed=1", "Scale=2"]);
+    }
+
+    #[test]
+    fn section_header_with_trailing_comment_is_still_recognized() {
+        let (_tmp, ini) = ini_with("[Display] ; the only section\nWindowed=1\n");
+        assert_eq!(ini.get("Display", "Windowed"), Some("1".to_string()));
+    }
+
+    #[test]
+    fn non_ascii_latin1_bytes_round_trip_through_save() {
+        // latin-1 maps every byte 1:1 to a codepoint, so a high byte like 0xE9 ('e' with an
+        // acute accent in Windows-1252/latin-1) must survive unchanged rather than being
+        // reinterpreted as UTF-8 (which 0xE9 alone is not valid as).
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("accented.ini");
+        fs::write(&path, [b'[', b'D', b']', b'\n', b'N', b'a', b'm', b'e', b'=', 0xE9, b'\n'])
+            .unwrap();
+        let mut ini = IniFile::open(path.clone()).unwrap();
+        assert_eq!(ini.get("D", "Name"), Some("\u{e9}".to_string()));
+
+        ini.set("D", "Other", "\u{e9}\u{e9}");
+        ini.save().unwrap();
+        let saved = fs::read(&path).unwrap();
+        assert_eq!(saved, [b'[', b'D', b']', b'\n', b'N', b'a', b'm', b'e', b'=', 0xE9, b'\n', b'O', b't', b'h', b'e', b'r', b'=', 0xE9, 0xE9, b'\n']);
+    }
+
+    #[test]
     fn preserves_crlf_line_endings() {
         let (tmp, mut ini) = ini_with("[Display]\r\nWindowed=1\r\n");
         ini.set("Display", "Windowed", "0");

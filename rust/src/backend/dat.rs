@@ -226,6 +226,49 @@ mod tests {
     }
 
     #[test]
+    fn truncated_file_does_not_panic() {
+        // Shorter than the 8-byte footer the directory reader always seeks for.
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("short.dat");
+        std::fs::write(&path, b"abc").unwrap();
+        let cache = DatCache::new();
+        assert_eq!(cache.read(&path, "x"), None);
+    }
+
+    #[test]
+    fn corrupt_tree_size_does_not_panic() {
+        // Footer claims a tree_size bigger than the whole file, so
+        // `dat_size - 8 - tree_size` underflows. Python's equivalent (`f.seek(negative)`)
+        // raises an uncaught ValueError there; this Rust port instead treats it as just
+        // another malformed-archive case and returns None - see the mismatch flagged to
+        // the team lead.
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("corrupt.dat");
+        let mut archive = vec![0u8; 16];
+        archive.extend_from_slice(&1_000_000u32.to_le_bytes()); // tree_size
+        archive.extend_from_slice(&24u32.to_le_bytes()); // dat_size
+        std::fs::write(&path, &archive).unwrap();
+        let cache = DatCache::new();
+        assert_eq!(cache.read(&path, "x"), None);
+    }
+
+    #[test]
+    fn corrupt_entry_count_does_not_panic() {
+        // Tree claims far more entries than the tree bytes can hold.
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("bad_count.dat");
+        let mut tree = Vec::new();
+        tree.extend_from_slice(&500u32.to_le_bytes()); // count, but no entry data follows
+        let mut archive = tree.clone();
+        let dat_size = (archive.len() + 8) as u32;
+        archive.extend_from_slice(&(tree.len() as u32).to_le_bytes());
+        archive.extend_from_slice(&dat_size.to_le_bytes());
+        std::fs::write(&path, &archive).unwrap();
+        let cache = DatCache::new();
+        assert_eq!(cache.read(&path, "x"), None);
+    }
+
+    #[test]
     fn parse_ini_text_reads_sections_case_insensitively() {
         let values = parse_ini_text("[Display]\nScale = 2\n; comment\n[Audio]\nVolume=5\n");
         assert_eq!(values.get(&("display".into(), "scale".into())), Some(&"2".to_string()));
@@ -238,5 +281,22 @@ mod tests {
         assert_eq!(values.len(), 2);
         assert_eq!(values.get(&("".into(), "loose".into())), Some(&"1".to_string()));
         assert_eq!(values.get(&("section".into(), "key".into())), Some(&"value".to_string()));
+    }
+
+    #[test]
+    fn parse_ini_text_keeps_first_value_of_a_repeated_key() {
+        // Neither Python nor Rust special-case a repeated key: the later line just
+        // overwrites the earlier one in the dict/HashMap, so the *last* occurrence wins.
+        let values = parse_ini_text("[Section]\nkey=first\nkey=second\n");
+        assert_eq!(values.get(&("section".into(), "key".into())), Some(&"second".to_string()));
+    }
+
+    #[test]
+    fn parse_ini_text_value_may_itself_contain_an_equals_sign() {
+        let values = parse_ini_text("[Section]\npath=C:\\a=b\\c\n");
+        assert_eq!(
+            values.get(&("section".into(), "path".into())),
+            Some(&"C:\\a=b\\c".to_string())
+        );
     }
 }
