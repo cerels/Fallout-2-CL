@@ -183,7 +183,7 @@ fn save_card(
     let frame = egui::Frame::default()
         .fill(fill)
         .stroke(egui::Stroke::new(if selected { 2.0 } else { 1.0 }, stroke_color))
-        .corner_radius(10.0)
+        .corner_radius(14.0)
         .inner_margin(egui::Margin::same(12));
 
     let response = frame

@@ -1,10 +1,19 @@
 //! Pip-Boy-inspired visual theme: dark background, phosphor-green accents, amber as the
 //! "something needs attention" color - see `docs/adr/0004-rust-rewrite.md` ("modern layout
 //! and spacing, amber/green CRT accents kept subtle rather than kitschy"). Plain
-//! `egui::Visuals` field tweaks, no extra theme crate: the simplest thing that works
-//! (`docs/adr/0005-boring-rust.md`).
+//! `egui::Visuals` field tweaks (plus one embedded font), no extra theme crate: the
+//! simplest thing that works (`docs/adr/0005-boring-rust.md`).
+
+use std::sync::Arc;
 
 use eframe::egui;
+
+/// Inter Regular (SIL Open Font License 1.1 - `assets/fonts/Inter-LICENSE.txt`), swapped in
+/// for egui's own default proportional font. Only the one static weight is embedded (not
+/// the full variable font or every static weight) to keep the binary small; `.strong()`
+/// text stays the same weight and leans on color/size instead, same as most of this app's
+/// text already did.
+const INTER_REGULAR: &[u8] = include_bytes!("../../assets/fonts/Inter-Regular.ttf");
 
 pub const ACCENT: egui::Color32 = egui::Color32::from_rgb(0x5d, 0xfc, 0x8a);
 pub const AMBER: egui::Color32 = egui::Color32::from_rgb(0xff, 0xb8, 0x4d);
@@ -38,12 +47,23 @@ pub(super) fn stroke_color() -> egui::Color32 {
 /// outright rather than maintaining a separate light palette nobody will ever see.
 pub fn install(ctx: &egui::Context) {
     ctx.set_theme(egui::ThemePreference::Dark);
+    ctx.set_fonts(build_fonts());
     let visuals = build_visuals();
     ctx.all_styles_mut(|style| {
         style.visuals = visuals.clone();
         style.spacing.item_spacing = egui::vec2(10.0, 10.0);
         style.spacing.button_padding = egui::vec2(12.0, 6.0);
     });
+}
+
+/// Put Inter ahead of egui's bundled default so every proportional-text widget picks it up
+/// automatically; the default stays right behind it as a fallback for any glyph Inter
+/// doesn't cover.
+fn build_fonts() -> egui::FontDefinitions {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert("Inter".to_owned(), Arc::new(egui::FontData::from_static(INTER_REGULAR)));
+    fonts.families.entry(egui::FontFamily::Proportional).or_default().insert(0, "Inter".to_owned());
+    fonts
 }
 
 fn build_visuals() -> egui::Visuals {
@@ -83,17 +103,16 @@ fn build_visuals() -> egui::Visuals {
     visuals.selection.bg_fill = egui::Color32::from_rgb(0x1c, 0x33, 0x22);
     visuals.selection.stroke = egui::Stroke::new(1.0, ACCENT);
 
-    for corner in [
-        &mut visuals.window_corner_radius,
-        &mut visuals.menu_corner_radius,
-    ] {
-        *corner = egui::CornerRadius::from(8.0);
+    // Softer/more modern than the sharp-ish corners this started with - still short of
+    // "bubbly". Windows/menus round the most since they're the biggest shapes on screen.
+    for corner in [&mut visuals.window_corner_radius, &mut visuals.menu_corner_radius] {
+        *corner = egui::CornerRadius::from(14.0);
     }
-    visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::from(8.0);
-    visuals.widgets.inactive.corner_radius = egui::CornerRadius::from(6.0);
-    visuals.widgets.hovered.corner_radius = egui::CornerRadius::from(6.0);
-    visuals.widgets.active.corner_radius = egui::CornerRadius::from(6.0);
-    visuals.widgets.open.corner_radius = egui::CornerRadius::from(6.0);
+    visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::from(12.0);
+    visuals.widgets.inactive.corner_radius = egui::CornerRadius::from(10.0);
+    visuals.widgets.hovered.corner_radius = egui::CornerRadius::from(10.0);
+    visuals.widgets.active.corner_radius = egui::CornerRadius::from(10.0);
+    visuals.widgets.open.corner_radius = egui::CornerRadius::from(10.0);
 
     visuals
 }
@@ -126,5 +145,5 @@ pub fn primary_button(text: impl Into<egui::WidgetText>, warn: bool) -> egui::Bu
             .strong(),
     )
     .fill(bg)
-    .corner_radius(6.0)
+    .corner_radius(10.0)
 }

@@ -17,7 +17,7 @@ pub fn card(ui: &mut egui::Ui, title: &str, add_contents: impl FnOnce(&mut egui:
     egui::Frame::default()
         .fill(theme::card_bg())
         .stroke(egui::Stroke::new(1.0, theme::stroke_color()))
-        .corner_radius(10.0)
+        .corner_radius(14.0)
         .inner_margin(egui::Margin { left: 16, right: 16, top: 12, bottom: 12 })
         .show(ui, |ui| {
             ui.label(egui::RichText::new(title.to_uppercase()).color(theme::ACCENT).strong().size(12.5));

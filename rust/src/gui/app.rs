@@ -437,7 +437,7 @@ impl App {
         let campaign = self.campaign;
         ui.horizontal(|ui| {
             let accent = theme::parse_hex(campaign.accent);
-            egui::Frame::default().fill(accent).corner_radius(7.0).inner_margin(egui::Margin { left: 6, right: 6, top: 4, bottom: 4 }).show(ui, |ui| {
+            egui::Frame::default().fill(accent).corner_radius(9.0).inner_margin(egui::Margin { left: 6, right: 6, top: 4, bottom: 4 }).show(ui, |ui| {
                 ui.label(egui::RichText::new(campaign.badge).color(egui::Color32::from_rgb(0x06, 0x21, 0x0f)).strong());
             });
             ui.menu_button(format!("{}  \u{25be}", campaign.name.to_uppercase()), |ui| {
