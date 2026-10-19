@@ -546,6 +546,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)] // on Windows the lookup reads %ProgramFiles%, not the home dir passed in
     fn steam_userdata_configs_under_finds_and_dedupes_profiles() {
         let tmp = tempfile::tempdir().unwrap();
         let userdata = tmp.path().join(".steam/steam/userdata");
