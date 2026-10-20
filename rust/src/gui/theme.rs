@@ -75,6 +75,13 @@ pub fn install(ctx: &egui::Context, accent: egui::Color32) {
         style.visuals = visuals.clone();
         style.spacing.item_spacing = egui::vec2(10.0, 10.0);
         style.spacing.button_padding = egui::vec2(12.0, 6.0);
+        // A settings page with more rows below the fold previously gave no hint of that until
+        // the player was already mid-scroll (egui's "floating" scrollbar default is invisible
+        // at rest). `thin()` keeps a bar always present but faint when idle, still expanding on
+        // hover/interaction.
+        style.spacing.scroll = egui::style::ScrollStyle::thin();
+        style.spacing.scroll.dormant_background_opacity = 0.3;
+        style.spacing.scroll.dormant_handle_opacity = 0.4;
     });
 }
 
