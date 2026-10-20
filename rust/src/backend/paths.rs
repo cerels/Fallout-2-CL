@@ -141,7 +141,8 @@ impl Paths {
     }
 
     pub fn mod_installed(&self, dat: &str) -> bool {
-        self.ci_path(&format!("mods/{dat}"), None).is_file()
+        let path = self.ci_path(&format!("mods/{dat}"), None);
+        path.is_file() || path.is_dir()
     }
 }
 
@@ -296,6 +297,15 @@ mod tests {
 
         assert!(paths.mod_installed("fo2tweaks.dat"));
         assert!(!paths.mod_installed("missing.dat"));
+    }
+
+    #[test]
+    fn mod_installed_recognizes_folder_mods() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("mods").join("fo1_base")).unwrap();
+        let paths = paths_in(tmp.path());
+
+        assert!(paths.mod_installed("fo1_base"));
     }
 
     #[test]
