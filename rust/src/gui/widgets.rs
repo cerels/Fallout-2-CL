@@ -209,9 +209,17 @@ fn draw_resolution(ui: &mut egui::Ui, sid: &str, store: &mut Store) {
         .split_once('x')
         .and_then(|(w, h)| Some((w.parse::<i32>().ok()?, h.parse::<i32>().ok()?)))
         .unwrap_or((640, 480));
-    ui.add(egui::DragValue::new(&mut w).range(640..=7680));
-    ui.label("\u{d7}");
+    // Added in reverse reading order on purpose: the enclosing row (`setting_row`'s right-hand
+    // `Sides` panel) lays its contents out right-to-left so they hug the right edge, which
+    // flips whatever order widgets are added in - confirmed against a real `fallout2.cfg`
+    // (resolution_x=2560, resolution_y=1440) rendering as "1440 x 2560" (W/H visually swapped)
+    // before this fix. Adding H's box first and W's last makes W land on the left, matching the
+    // "W x H" reading order of the preset dropdown right next to it.
     ui.add(egui::DragValue::new(&mut h).range(480..=4320));
+    ui.label(egui::RichText::new("H").color(theme::MUTED).small());
+    ui.label("\u{d7}");
+    ui.add(egui::DragValue::new(&mut w).range(640..=7680));
+    ui.label(egui::RichText::new("W").color(theme::MUTED).small());
     let updated = format!("{w}x{h}");
     if updated != current {
         store.set(sid, &updated);
