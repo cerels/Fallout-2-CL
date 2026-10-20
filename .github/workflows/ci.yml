@@ -1,0 +1,43 @@
+name: CI
+
+# Runs on every push/PR touching the launcher, so regressions surface before a release
+# tag is cut. build.yml handles the actual per-OS release builds.
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["rust/**", ".github/workflows/ci.yml"]
+  pull_request:
+    paths: ["rust/**", ".github/workflows/ci.yml"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+    working-directory: rust
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-dev libwayland-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Check
+        run: cargo check --locked --all-targets
+
+      - name: Test
+        run: cargo test --locked
