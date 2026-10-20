@@ -5,7 +5,7 @@ A settings/mod-manager launcher for Fallout 2 Community Edition and the total-co
 ## Language
 
 **Campaign**:
-One of the mutually-exclusive top-level games the launcher can run and manage: Vanilla/CE, Fallout et Tu, Fallout: Sonora, Fallout 2: Nevada. Picked via a switcher at the top-left logo; the launcher remembers the last one played.
+One of the mutually-exclusive top-level games the launcher can run and manage: Vanilla/CE, Fallout et Tu, Fallout: Sonora, Fallout 2: Nevada. Picked via a switcher at the top-left badge; the launcher remembers the last one played.
 _Avoid_: Mod (for Et Tu/Sonora/Nevada — they're whole separate games, not drop-in mods), Conversion (ambiguous with "total conversion" as a genre label), Game.
 
 **Campaign root**:
@@ -36,3 +36,11 @@ _Avoid_: Regular mod (mod-provided settings, including any key bindings a mod de
 
 **Shareable campaign**:
 A campaign whose config uses the same file format as Vanilla/CE, so shared settings can sync into it: Vanilla/CE, Et Tu, Nevada. Sonora's FISSION fork uses an unrelated config format and has no equivalent keys, so it never participates — not a bug to fix, just a format it doesn't share.
+
+**Badge**:
+The short bracket-text code (`F2`, `ET`, `SO`, `NV`) identifying a campaign everywhere in the terminal chrome — the sidebar switcher, the nav menu entries. Stays bracket-text by deliberate choice (see `docs/adr/0008-terminal-skin-escalation.md`).
+_Avoid_: Cover art, icon, logo.
+
+**Cover art**:
+A campaign's own official promotional art (not drawn by this project), shown on its Campaigns-page card and, as a faded background wash, behind the sidebar nav. RPU has none of its own — its tab reuses CE's, since RPU isn't a separate campaign. Distinct from the badge, which it doesn't replace (see `docs/adr/0010-campaign-cover-art.md`).
+_Avoid_: Badge, Logo, Grid (SteamGridDB's own asset-type names, not this project's vocabulary).

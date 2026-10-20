@@ -7,6 +7,17 @@ conversions built on the same engine: [Fallout et Tu](https://github.com/rotator
 [Restoration Project](https://github.com/BGforgeNet/Fallout2_Restoration_Project) and the regular
 mods people actually run alongside them.
 
+![Campaigns page](docs/screenshots/campaigns.png)
+
+<details>
+<summary>More screenshots (Play, Settings, Mods)</summary>
+
+![Play page](docs/screenshots/play.png)
+![A settings page](docs/screenshots/settings.png)
+![Mods page](docs/screenshots/mods.png)
+
+</details>
+
 ## Why this exists
 
 Playing one of the classic Fallout games properly today means hand-editing `fallout2.cfg`,
@@ -20,7 +31,7 @@ real labeled controls instead of raw config text, manage your mods and saves, an
 ## What it does
 
 - One launcher, every campaign. CE, Et Tu, Sonora and Nevada each get their own settings, mods and
-  saves, kept fully independent. Switch between them with one click on the sidebar logo, and the
+  saves, kept fully independent. Switch between them with one click on the sidebar badge, and the
   launcher remembers the last one you played. (Olympus 2207 isn't supported yet; see
   [docs/adr/0002-olympus-not-supported.md](docs/adr/0002-olympus-not-supported.md).)
 - Every setting, as an actual control. Switches, dropdowns, sliders, key capture, resolution
@@ -83,8 +94,9 @@ there, which this launcher doesn't automate), but everything else works the same
 
 ## A quick tour
 
-- Campaigns: the page to install Et Tu, Sonora, Nevada, or RPU for the first time. The sidebar
-  logo above it is the quick-switcher between whichever campaigns you already have installed.
+- Campaigns: the page to install Et Tu, Sonora, Nevada, or RPU for the first time, each shown
+  with its own cover art. The sidebar badge above it is the quick-switcher between whichever
+  campaigns you already have installed.
 - Settings pages: one tab per settings area (Display, Interface, Gameplay, Combat Balance, Audio,
   and one per installed mod that ships its own settings). Use the search box at the top if you
   know roughly what you're looking for but not which tab it's on.
@@ -115,6 +127,9 @@ the launcher's own Launcher page. The flags above just override that for one lau
 | Fallout: Sonora | [cambragol/Fallout-Sonora-English](https://github.com/cambragol/Fallout-Sonora-English) | installs into `Sonora/` |
 | Fallout 2: Nevada | [HogLord69/fallout-english-localization](https://github.com/HogLord69/fallout-english-localization) | installs into `Nevada/` |
 | Restoration Project | [BGforgeNet/Fallout2_Restoration_Project](https://github.com/BGforgeNet/Fallout2_Restoration_Project) | a content overlay for CE, not a separate campaign, with its own tab inside CE's menu |
+
+Cover art on each campaign's card is that campaign's own official promotional artwork, not
+something this project drew.
 
 Regular mods with one-click install from the Mods page today: NPC Armor, Party Orders, FO2Tweaks,
 and the High Resolution Patch. Several more (Unofficial Patch, sfall's mod settings) get a full

@@ -511,6 +511,7 @@ impl App {
             .exact_size(250.0)
             .frame(egui::Frame::default().fill(theme::bg_panel()).inner_margin(egui::Margin::same(8)))
             .show(ui, |ui| {
+                self.draw_nav_cover_wash(ui);
                 ui.add_space(8.0);
                 self.draw_campaign_switcher(ui);
                 ui.add_space(8.0);
@@ -570,6 +571,18 @@ impl App {
                 });
             });
         egui::Panel::left("nav_accent_rule").resizable(false).exact_size(2.0).frame(egui::Frame::default().fill(accent)).show(ui, |_ui| {});
+    }
+
+    /// Experimental: a faint wash of the active campaign's cover art behind the whole nav
+    /// panel, re-tinting the sidebar by campaign beyond just `accent` (ADR 0008 already
+    /// drives chrome color from it; this layers the cover's own shape/color underneath at
+    /// low opacity, painted first so every widget added after still draws on top of it).
+    /// Keep only if it reads as atmosphere, not noise - see docs/adr/0010-campaign-cover-art.md.
+    fn draw_nav_cover_wash(&self, ui: &egui::Ui) {
+        let rect = ui.max_rect();
+        egui::Image::from_bytes(self.campaign.cover_uri, self.campaign.cover)
+            .tint(egui::Color32::from_white_alpha(45))
+            .paint_at(ui, rect);
     }
 
     /// Whether nav row `i` needs a player's attention right now - drawn as its label turning
