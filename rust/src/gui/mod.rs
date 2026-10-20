@@ -6,6 +6,7 @@
 //! trait-object machinery beyond what egui itself asks for.
 
 pub(crate) mod app;
+pub(crate) mod errors;
 pub(crate) mod jobs;
 mod keys_egui;
 pub(crate) mod open;
