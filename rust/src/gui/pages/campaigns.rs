@@ -67,112 +67,130 @@ fn campaign_card(app: &mut App, ui: &mut egui::Ui, campaign: &'static Campaign) 
     let busy = app.campaigns_busy.get(campaign.id).cloned();
 
     card(ui, &format!("{}  {}", campaign.badge, campaign.name), |ui| {
-        let mut status = description(campaign.id).to_string();
-        if is_active {
-            status.push_str(" Currently active.");
-        } else if is_installed {
-            status.push_str(" Installed.");
-        } else {
-            status.push_str(" Not installed yet.");
-        }
-        if campaign.id == "ettu" && is_installed && !ettu_install::has_fallout1_data(&app.paths) {
-            status.push_str(" Needs Fallout 1's data extracted before it can start a game.");
-        }
-        ui.label(egui::RichText::new(status).color(theme::MUTED));
-        ui.add_space(6.0);
-
         ui.horizontal(|ui| {
-            if !is_installed {
-                if busy.is_some() {
-                    crate::gui::widgets::busy_status(ui, app.job_stages.get(campaign.id).map(String::as_str));
-                } else if ui.button("Install").clicked() {
-                    start_install(app, campaign);
+            cover_thumbnail(ui, campaign);
+            ui.vertical(|ui| {
+                let mut status = description(campaign.id).to_string();
+                if is_active {
+                    status.push_str(" Currently active.");
+                } else if is_installed {
+                    status.push_str(" Installed.");
+                } else {
+                    status.push_str(" Not installed yet.");
                 }
-            }
-            if is_installed && !is_active && ui.button("Switch to this campaign").clicked() {
-                let ctx = ui.ctx().clone();
-                app.request_switch_campaign(&ctx, campaign);
-            }
-        });
+                if campaign.id == "ettu" && is_installed && !ettu_install::has_fallout1_data(&app.paths) {
+                    status.push_str(" Needs Fallout 1's data extracted before it can start a game.");
+                }
+                ui.label(egui::RichText::new(status).color(theme::MUTED));
+                ui.add_space(6.0);
 
-        if campaign.id == "ettu" && is_installed {
-            maybe_autodetect_fallout1(app);
-            ui.add_space(8.0);
-            ui.label(
-                egui::RichText::new(
-                    "Path to a Fallout 1 copy you already own's MASTER.DAT (needed once, to pull its \
-                     data into Et Tu):",
-                )
-                .color(theme::MUTED)
-                .small(),
-            );
-            ui.horizontal(|ui| {
-                if ui
-                    .add(
-                        egui::TextEdit::singleline(&mut app.fallout1_path)
-                            .desired_width(300.0)
-                            .hint_text("/path/to/Fallout 1/MASTER.DAT"),
-                    )
-                    .changed()
-                {
-                    app.fallout1_path_error = None;
-                }
-                if ui.button("Browse\u{2026}").clicked() {
-                    browse_for_fallout1_master_dat(app);
-                    app.fallout1_path_error = None;
-                }
-                let extracting = app.campaigns_busy.get("ettu-f1").is_some();
-                if extracting {
-                    crate::gui::widgets::busy_status(ui, app.job_stages.get("ettu-f1").map(String::as_str));
-                } else if ui.button("Extract").clicked() {
-                    start_fallout1_extract(app);
-                }
-            });
-            if let Some(err) = &app.fallout1_path_error {
-                ui.label(egui::RichText::new(err).color(theme::DANGER).small());
-            }
-            ui.add_space(4.0);
-            ui.label(
-                egui::RichText::new(
-                    "Paste into Fallout 1's own Steam entry (Properties \u{2192} General \u{2192} Launch \
-                     Options) so pressing Play there opens straight into Et Tu instead:",
-                )
-                .color(theme::MUTED)
-                .small(),
-            );
-            ui.horizontal(|ui| {
-                let (option_text, _verified) = steam_launch_option(Some("ettu"));
-                let mut buf = option_text.clone();
-                ui.add(egui::TextEdit::singleline(&mut buf).desired_width(420.0).interactive(false));
-                if ui.button("Copy").clicked() {
-                    ui.ctx().copy_text(option_text);
-                }
-            });
-        }
-
-        if matches!(campaign.id, "sonora" | "nevada") && is_installed {
-            ui.add_space(8.0);
-            if ui
-                .button("Add to Steam\u{2026}")
-                .on_hover_text(format!(
-                    "Adds this launcher as a non-Steam game, forced into this campaign - {} has no \
-                     Steam app of its own to paste launch options into.",
-                    campaign.name
-                ))
-                .clicked()
-            {
-                app.pending_confirm = Some(PendingConfirm {
-                    title: "Add to Steam".to_string(),
-                    message: format!(
-                        "Add this launcher to your Steam library as a non-Steam game, forced into {}? \
-                         This edits Steam's own shortcuts.vdf (backed up first).",
-                        campaign.name
-                    ),
-                    action: ConfirmAction::AddCampaignToSteam(campaign),
+                ui.horizontal(|ui| {
+                    if !is_installed {
+                        if busy.is_some() {
+                            crate::gui::widgets::busy_status(ui, app.job_stages.get(campaign.id).map(String::as_str));
+                        } else if ui.button("Install").clicked() {
+                            start_install(app, campaign);
+                        }
+                    }
+                    if is_installed && !is_active && ui.button("Switch to this campaign").clicked() {
+                        let ctx = ui.ctx().clone();
+                        app.request_switch_campaign(&ctx, campaign);
+                    }
                 });
-            }
-        }
+
+                if campaign.id == "ettu" && is_installed {
+                    maybe_autodetect_fallout1(app);
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new(
+                            "Path to a Fallout 1 copy you already own's MASTER.DAT (needed once, to pull its \
+                             data into Et Tu):",
+                        )
+                        .color(theme::MUTED)
+                        .small(),
+                    );
+                    ui.horizontal(|ui| {
+                        if ui
+                            .add(
+                                egui::TextEdit::singleline(&mut app.fallout1_path)
+                                    .desired_width(300.0)
+                                    .hint_text("/path/to/Fallout 1/MASTER.DAT"),
+                            )
+                            .changed()
+                        {
+                            app.fallout1_path_error = None;
+                        }
+                        if ui.button("Browse\u{2026}").clicked() {
+                            browse_for_fallout1_master_dat(app);
+                            app.fallout1_path_error = None;
+                        }
+                        let extracting = app.campaigns_busy.get("ettu-f1").is_some();
+                        if extracting {
+                            crate::gui::widgets::busy_status(ui, app.job_stages.get("ettu-f1").map(String::as_str));
+                        } else if ui.button("Extract").clicked() {
+                            start_fallout1_extract(app);
+                        }
+                    });
+                    if let Some(err) = &app.fallout1_path_error {
+                        ui.label(egui::RichText::new(err).color(theme::DANGER).small());
+                    }
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new(
+                            "Paste into Fallout 1's own Steam entry (Properties \u{2192} General \u{2192} Launch \
+                             Options) so pressing Play there opens straight into Et Tu instead:",
+                        )
+                        .color(theme::MUTED)
+                        .small(),
+                    );
+                    ui.horizontal(|ui| {
+                        let (option_text, _verified) = steam_launch_option(Some("ettu"));
+                        let mut buf = option_text.clone();
+                        ui.add(egui::TextEdit::singleline(&mut buf).desired_width(420.0).interactive(false));
+                        if ui.button("Copy").clicked() {
+                            ui.ctx().copy_text(option_text);
+                        }
+                    });
+                }
+
+                if matches!(campaign.id, "sonora" | "nevada") && is_installed {
+                    ui.add_space(8.0);
+                    if ui
+                        .button("Add to Steam\u{2026}")
+                        .on_hover_text(format!(
+                            "Adds this launcher as a non-Steam game, forced into this campaign - {} has no \
+                             Steam app of its own to paste launch options into.",
+                            campaign.name
+                        ))
+                        .clicked()
+                    {
+                        app.pending_confirm = Some(PendingConfirm {
+                            title: "Add to Steam".to_string(),
+                            message: format!(
+                                "Add this launcher to your Steam library as a non-Steam game, forced into {}? \
+                                 This edits Steam's own shortcuts.vdf (backed up first).",
+                                campaign.name
+                            ),
+                            action: ConfirmAction::AddCampaignToSteam(campaign),
+                        });
+                    }
+                }
+            });
+        });
     });
+}
+
+/// The campaign's cover art (see `GLOSSARY.md`'s "Cover art" entry), scaled down to a small
+/// store-tile thumbnail. Distinct from `campaign.badge` (the bracket-text code), which stays
+/// put everywhere else per ADR 0008 - this is additive, shown only here.
+fn cover_thumbnail(ui: &mut egui::Ui, campaign: &Campaign) {
+    let width = 84.0;
+    ui.add(
+        egui::Image::from_bytes(campaign.cover_uri, campaign.cover)
+            .fit_to_exact_size(egui::vec2(width, width * 1.5))
+            .corner_radius(6.0),
+    );
+    ui.add_space(12.0);
 }
 
 fn start_install(app: &mut App, campaign: &'static Campaign) {

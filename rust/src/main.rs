@@ -79,6 +79,7 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             gui::theme::install(&cc.egui_ctx, initial_accent);
+            egui_extras::install_image_loaders(&cc.egui_ctx);
             Ok(Box::new(gui::App::new(paths_for_app, launch_result_for_app)))
         }),
     )?;

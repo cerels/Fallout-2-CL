@@ -20,10 +20,17 @@ pub struct Campaign {
     pub subdir: &'static str,
     /// Candidate engine binary filenames, checked in order.
     pub bin_names: &'static [&'static str],
-    /// Short placeholder shown at the campaign switcher until real artwork exists.
+    /// Short bracket-text code shown everywhere in the terminal chrome (sidebar switcher, nav) -
+    /// see `GLOSSARY.md`'s "Badge" entry and `docs/adr/0008-terminal-skin-escalation.md`.
     pub badge: &'static str,
     /// Badge color (hex).
     pub accent: &'static str,
+    /// This campaign's cover art (600x900 PNG bytes, embedded at build time) and the URI
+    /// `egui_extras`'s image loader caches its decoded texture under - see `GLOSSARY.md`'s
+    /// "Cover art" entry and `docs/adr/0010-campaign-cover-art.md`. Each cover is the campaign's
+    /// own official promotional art, not something this project drew.
+    pub cover: &'static [u8],
+    pub cover_uri: &'static str,
     /// Whether this campaign's config uses the same file/section/key format as Vanilla/CE
     /// (see GLOSSARY.md's "Shareable campaign" and `docs/adr/0003-shared-settings-sync-on-save.md`),
     /// so a `Setting::shared` value can sync straight into it. False only for Sonora, whose
@@ -54,6 +61,8 @@ pub const CAMPAIGNS: &[Campaign] = &[
         bin_names: &["fallout2-ce", "fallout2-ce.exe"],
         badge: "F2",
         accent: "#5dfc8a",
+        cover: include_bytes!("../../assets/covers/ce.png"),
+        cover_uri: "bytes://covers/ce.png",
         shareable: true,
     },
     Campaign {
@@ -63,6 +72,8 @@ pub const CAMPAIGNS: &[Campaign] = &[
         bin_names: &["fallout2-ce", "fallout2-ce.exe", "Fallout2.exe"],
         badge: "ET",
         accent: "#5d9dfc",
+        cover: include_bytes!("../../assets/covers/ettu.png"),
+        cover_uri: "bytes://covers/ettu.png",
         shareable: true,
     },
     Campaign {
@@ -72,6 +83,8 @@ pub const CAMPAIGNS: &[Campaign] = &[
         bin_names: &["fallout-fission", "fallout-fission.exe"],
         badge: "SO",
         accent: "#ffb84d",
+        cover: include_bytes!("../../assets/covers/sonora.png"),
+        cover_uri: "bytes://covers/sonora.png",
         shareable: false,
     },
     Campaign {
@@ -81,6 +94,8 @@ pub const CAMPAIGNS: &[Campaign] = &[
         bin_names: &["fallout2-ce", "fallout2-ce.exe"],
         badge: "NV",
         accent: "#ff7a5d",
+        cover: include_bytes!("../../assets/covers/nevada.png"),
+        cover_uri: "bytes://covers/nevada.png",
         shareable: true,
     },
 ];
