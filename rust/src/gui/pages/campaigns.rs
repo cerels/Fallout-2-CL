@@ -90,7 +90,8 @@ fn campaign_card(app: &mut App, ui: &mut egui::Ui, campaign: &'static Campaign) 
                 }
             }
             if is_installed && !is_active && ui.button("Switch to this campaign").clicked() {
-                app.switch_campaign(ui.ctx(), campaign);
+                let ctx = ui.ctx().clone();
+                app.request_switch_campaign(&ctx, campaign);
             }
         });
 
@@ -106,13 +107,19 @@ fn campaign_card(app: &mut App, ui: &mut egui::Ui, campaign: &'static Campaign) 
                 .small(),
             );
             ui.horizontal(|ui| {
-                ui.add(
-                    egui::TextEdit::singleline(&mut app.fallout1_path)
-                        .desired_width(300.0)
-                        .hint_text("/path/to/Fallout 1/MASTER.DAT"),
-                );
+                if ui
+                    .add(
+                        egui::TextEdit::singleline(&mut app.fallout1_path)
+                            .desired_width(300.0)
+                            .hint_text("/path/to/Fallout 1/MASTER.DAT"),
+                    )
+                    .changed()
+                {
+                    app.fallout1_path_error = None;
+                }
                 if ui.button("Browse\u{2026}").clicked() {
                     browse_for_fallout1_master_dat(app);
+                    app.fallout1_path_error = None;
                 }
                 let extracting = app.campaigns_busy.get("ettu-f1").is_some();
                 if extracting {
@@ -121,6 +128,9 @@ fn campaign_card(app: &mut App, ui: &mut egui::Ui, campaign: &'static Campaign) 
                     start_fallout1_extract(app);
                 }
             });
+            if let Some(err) = &app.fallout1_path_error {
+                ui.label(egui::RichText::new(err).color(theme::DANGER).small());
+            }
             ui.add_space(4.0);
             ui.label(
                 egui::RichText::new(
@@ -235,12 +245,10 @@ fn browse_for_fallout1_master_dat(app: &mut App) {
 
 fn start_fallout1_extract(app: &mut App) {
     if app.fallout1_path.trim().is_empty() {
-        app.error_dialog = Some((
-            "Fallout 1 data".to_string(),
-            "Type the path to Fallout 1's MASTER.DAT below, then try again.".to_string(),
-        ));
+        app.fallout1_path_error = Some("Type the path to Fallout 1's MASTER.DAT above first.".to_string());
         return;
     }
+    app.fallout1_path_error = None;
     let master_dat = std::path::PathBuf::from(app.fallout1_path.trim());
     let target = *crate::backend::campaigns::by_id("ettu").expect("\"ettu\" is a registered campaign");
     app.campaigns_busy.insert("ettu-f1", "Extracting\u{2026}".to_string());
@@ -259,6 +267,6 @@ pub(crate) fn add_to_steam_now(app: &mut App, campaign: &'static Campaign) {
                 "Restart Steam to see it in your library (under the non-Steam games section).".to_string(),
             ));
         }
-        Err(e) => app.error_dialog = Some(("Couldn't add to Steam".to_string(), e)),
+        Err(e) => app.error_dialog = Some(("Couldn't add to Steam".to_string(), crate::gui::errors::friendly(&e))),
     }
 }
