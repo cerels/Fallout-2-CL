@@ -379,7 +379,7 @@ impl App {
                 self.mods.pending_updates.remove(&entry_id);
                 self.needs_reload = true;
             }
-            Err(e) => self.error_dialog = Some(("Download failed".to_string(), e)),
+            Err(e) => self.error_dialog = Some(("Download failed".to_string(), crate::gui::errors::friendly(&e))),
         }
     }
 
