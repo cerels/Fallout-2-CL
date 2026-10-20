@@ -31,6 +31,8 @@ pub(crate) enum ConfirmAction {
     AddCampaignToSteam(&'static Campaign),
     UninstallRpu,
     DeleteMod { dat: String, extra: Vec<String>, catalog_id: Option<String> },
+    Discard,
+    SwitchCampaign(&'static Campaign),
 }
 
 pub(crate) struct PendingConfirm {
@@ -129,6 +131,7 @@ pub struct App {
     pub(crate) mods: ModsPage,
     pub(crate) campaigns_busy: HashMap<&'static str, String>,
     pub(crate) fallout1_path: String,
+    pub(crate) fallout1_path_error: Option<String>,
     pub(crate) fallout1_autodetect_tried: bool,
     pub(crate) rpu_pending_update: Option<String>,
     pub(crate) rpu_busy: bool,
@@ -169,6 +172,7 @@ impl App {
             mods,
             campaigns_busy: HashMap::new(),
             fallout1_path: String::new(),
+            fallout1_path_error: None,
             fallout1_autodetect_tried: false,
             rpu_pending_update: None,
             rpu_busy: false,
@@ -217,6 +221,26 @@ impl App {
         self.store.save(&self.paths)?;
         self.mods.save(&self.paths)?;
         Ok(())
+    }
+
+    /// Entry point every "switch campaign" button should call instead of `switch_campaign`
+    /// directly - asks first when there's something unsaved to lose, since switching reloads
+    /// the whole settings/mods page set for the new campaign (see `switch_campaign`'s doc
+    /// comment on `save_all_best_effort`, which is silent about a failed save).
+    pub(crate) fn request_switch_campaign(&mut self, ctx: &egui::Context, campaign: &'static Campaign) {
+        if self.dirty_count() > 0 {
+            self.pending_confirm = Some(PendingConfirm {
+                title: "Switch campaign".to_string(),
+                message: format!(
+                    "Switch to {}? Your unsaved changes will be saved first, but if that save fails \
+                     for any reason they'll be lost silently.",
+                    campaign.name
+                ),
+                action: ConfirmAction::SwitchCampaign(campaign),
+            });
+        } else {
+            self.switch_campaign(ctx, campaign);
+        }
     }
 
     pub(crate) fn switch_campaign(&mut self, ctx: &egui::Context, campaign: &'static Campaign) {
@@ -283,7 +307,7 @@ impl App {
         }
         if self.dirty_count() > 0 {
             if let Err(e) = self.save_all() {
-                self.error_dialog = Some(("Couldn't save settings".to_string(), e));
+                self.error_dialog = Some(("Couldn't save settings".to_string(), super::errors::friendly(&e)));
                 return;
             }
         }
@@ -314,8 +338,13 @@ impl App {
         self.want_close = true;
     }
 
-    fn apply_confirm(&mut self, action: ConfirmAction) {
+    fn apply_confirm(&mut self, action: ConfirmAction, ctx: &egui::Context) {
         match action {
+            ConfirmAction::Discard => {
+                self.store.revert();
+                self.mods.revert(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info, self.campaign.id == "ce");
+            }
+            ConfirmAction::SwitchCampaign(campaign) => self.switch_campaign(ctx, campaign),
             ConfirmAction::InstallCeThenPlay => {
                 self.ce_installing = true;
                 self.job_stages.insert("ce".to_string(), "Downloading\u{2026}".to_string());
@@ -351,7 +380,7 @@ impl App {
                             "Fallout 2 CE is installed. Press Play when you're ready.".to_string(),
                         ))
                     }
-                    Err(e) => self.error_dialog = Some(("Install failed".to_string(), e)),
+                    Err(e) => self.error_dialog = Some(("Install failed".to_string(), super::errors::friendly(&e))),
                 }
             }
             JobOutcome::CampaignInstall(id, result) => {
@@ -359,7 +388,7 @@ impl App {
                 self.job_stages.remove(id);
                 if let Err(e) = result {
                     let name = by_id(id).map(|c| c.name).unwrap_or(id);
-                    self.error_dialog = Some(("Install failed".to_string(), format!("{name}: {e}")));
+                    self.error_dialog = Some(("Install failed".to_string(), format!("{name}: {}", super::errors::friendly(&e))));
                 }
             }
             JobOutcome::Fallout1Extract(result) => {
@@ -372,7 +401,7 @@ impl App {
                             "Done - Et Tu is ready to play.".to_string(),
                         ))
                     }
-                    Err(e) => self.error_dialog = Some(("Extraction failed".to_string(), e)),
+                    Err(e) => self.error_dialog = Some(("Extraction failed".to_string(), super::errors::friendly(&e))),
                 }
             }
             JobOutcome::RpuInstall(result) => {
@@ -380,7 +409,10 @@ impl App {
                 self.job_stages.remove("rpu");
                 match result {
                     Ok(()) => self.needs_reload = true,
-                    Err(e) => self.error_dialog = Some(("Install failed".to_string(), format!("Restoration Project: {e}"))),
+                    Err(e) => {
+                        self.error_dialog =
+                            Some(("Install failed".to_string(), format!("Restoration Project: {}", super::errors::friendly(&e))))
+                    }
                 }
             }
             JobOutcome::RpuUpdateCheck(version) => {
@@ -452,12 +484,15 @@ impl App {
                         );
                         if ui.button(theme::mono("[ SAVE ]")).clicked() {
                             if let Err(e) = self.save_all() {
-                                self.error_dialog = Some(("Couldn't save settings".to_string(), e));
+                                self.error_dialog = Some(("Couldn't save settings".to_string(), super::errors::friendly(&e)));
                             }
                         }
                         if ui.button(theme::mono("[ DISCARD ]")).clicked() {
-                            self.store.revert();
-                            self.mods.revert(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info, self.campaign.id == "ce");
+                            self.pending_confirm = Some(PendingConfirm {
+                                title: "Discard changes".to_string(),
+                                message: format!("Throw away {dirty} unsaved change{}? This can't be undone.", if dirty == 1 { "" } else { "s" }),
+                                action: ConfirmAction::Discard,
+                            });
                         }
                     } else {
                         ui.label(theme::mono("ALL SAVED").color(theme::MUTED));
@@ -564,7 +599,7 @@ impl App {
                     ui.add_enabled_ui(enabled, |ui| {
                         if ui.button(theme::mono(text)).clicked() {
                             let ctx = ui.ctx().clone();
-                            self.switch_campaign(&ctx, c);
+                            self.request_switch_campaign(&ctx, c);
                             ui.close();
                         }
                     });
@@ -694,7 +729,7 @@ impl App {
             if let Some(yes) = choice {
                 let confirm = self.pending_confirm.take().unwrap();
                 if yes {
-                    self.apply_confirm(confirm.action);
+                    self.apply_confirm(confirm.action, ctx);
                 }
             }
         }
