@@ -181,12 +181,41 @@ fn draw_control(ui: &mut egui::Ui, s: &Setting, store: &mut Store, capturing: &m
         "volume" => draw_volume(ui, &sid, store),
         "int" => draw_number(ui, s, &sid, store, false),
         "float" => draw_number(ui, s, &sid, store, true),
-        _ => {
-            let mut buf = store.value(&sid).to_string();
-            if ui.add(egui::TextEdit::singleline(&mut buf).desired_width(220.0)).changed() {
-                store.set(&sid, &buf);
+        _ => draw_free_text(ui, s, &sid, store),
+    }
+}
+
+/// Fallback for any `kind` this launcher doesn't otherwise recognize - unreachable by every
+/// schema shipped with this launcher today (all of them use "bool"/"choice"/"resolution"/"key"/
+/// "volume"/"int"/"float"), but a third-party mod's own schema file could still hit it with a
+/// typo'd or future `kind` value. A schema entry that specifies real bounds (`min`/`max` outside
+/// the 0..=100 that's used when neither is given - see `backend::schema`) is treated as meaning
+/// "this is actually numeric", and gets the same inline-error treatment as any other field
+/// validation in this app; anything else stays genuinely free text.
+fn draw_free_text(ui: &mut egui::Ui, s: &Setting, sid: &str, store: &mut Store) {
+    let looks_numeric = s.minimum != 0.0 || s.maximum != 100.0;
+    let mut buf = store.value(sid).to_string();
+    let response = ui.add(egui::TextEdit::singleline(&mut buf).desired_width(220.0));
+    if looks_numeric && !buf.trim().is_empty() {
+        match buf.trim().parse::<f64>() {
+            Ok(v) if v >= s.minimum && v <= s.maximum => {
+                if response.changed() {
+                    store.set(sid, &buf);
+                }
+            }
+            Ok(_) => {
+                ui.label(
+                    egui::RichText::new(format!("Must be between {} and {}", s.minimum, s.maximum))
+                        .color(theme::DANGER)
+                        .small(),
+                );
+            }
+            Err(_) => {
+                ui.label(egui::RichText::new("Must be a number").color(theme::DANGER).small());
             }
         }
+    } else if response.changed() {
+        store.set(sid, &buf);
     }
 }
 
