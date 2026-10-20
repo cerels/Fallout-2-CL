@@ -50,7 +50,9 @@ impl ModsPage {
         let mut page = ModsPage {
             rows: Vec::new(),
             initial: Vec::new(),
-            hide_missing: true,
+            // Off by default: with nothing installed yet, hiding the catalog too left the whole
+            // page blank with no indication a "Show not installed" checkbox exists at all.
+            hide_missing: false,
             pending_updates: HashMap::new(),
             busy: HashSet::new(),
             checked_for_updates: false,
@@ -253,6 +255,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     card(ui, "Load order", |ui| {
         let rows = app.mods.rows.clone();
         let mut move_requested: Option<(usize, i32)> = None;
+        let mut shown = 0usize;
         for (i, row) in rows.iter().enumerate() {
             if rpu_owned.contains(&row.dat.to_lowercase()) {
                 continue;
@@ -260,9 +263,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             if !row.installed && app.mods.hide_missing {
                 continue;
             }
-            if i > 0 {
+            if shown > 0 {
                 ui.separator();
             }
+            shown += 1;
             ui.horizontal(|ui| {
                 if row.installed {
                     let mut enabled = row.enabled;
@@ -321,6 +325,16 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         if let Some((i, delta)) = move_requested {
             let j = (i as i32 + delta) as usize;
             app.mods.rows.swap(i, j);
+        }
+        if shown == 0 {
+            let hint = if app.mods.hide_missing {
+                "Nothing installed, and \u{201c}Show not installed\u{201d} is off above - turn it on to browse what's available."
+            } else if app.campaign.id == "ce" {
+                "No mods installed or available to download yet."
+            } else {
+                "No mods installed for this campaign yet. Drop files in mods/ or use \u{201c}Open mods folder\u{201d} above."
+            };
+            ui.label(egui::RichText::new(hint).color(theme::MUTED));
         }
     });
 }
