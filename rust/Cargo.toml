@@ -2,6 +2,7 @@
 name = "f2launcher"
 version = "0.1.2"
 edition = "2024"
+license = "MIT"
 
 [dependencies]
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
