@@ -11,8 +11,10 @@
 
 use eframe::egui;
 
+use crate::backend::campaigns::by_id;
 use crate::backend::rpu_install::{is_installed, load_rpu_state, owned_file_names};
 use crate::gui::app::{App, ConfirmAction, PendingConfirm};
+use crate::gui::pages::campaigns::cover_thumbnail;
 use crate::gui::theme;
 use crate::gui::widgets::card;
 
@@ -23,52 +25,60 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     ui.add_space(8.0);
 
     let installed = is_installed(&app.paths);
+    // RPU isn't a separate campaign (see GLOSSARY.md) so it gets no cover art of its own -
+    // this reuses CE's, since RPU is just more of that same game.
+    let ce = by_id("ce").expect("\"ce\" is a registered campaign");
     card(ui, "Restoration Project Updated", |ui| {
-        let status = if installed {
-            let version = load_rpu_state(&app.paths)
-                .get("version")
-                .cloned()
-                .unwrap_or_else(|| "an unknown version".to_string());
-            format!(
-                "Installed ({version}). Restores cut content and fixes to Fallout 2, and brings its \
-                 officially-bundled NPC Armor, Party Orders and Unofficial Patch along with it, plus \
-                 its own optional extras (enhanced world map, new animations, Cassidy's voice/head, \
-                 ...) - all switched on individually below, never on the Mods page."
-            )
-        } else {
-            "Restores cut content and fixes to Fallout 2 - not a separate campaign, just more of the \
-             same game. Not installed yet."
-                .to_string()
-        };
-        ui.label(egui::RichText::new(status).color(theme::MUTED));
-        ui.add_space(6.0);
-
         ui.horizontal(|ui| {
-            if ui.button("Open source").clicked() {
-                crate::gui::open::open(RPU_HOMEPAGE);
-            }
-            let busy = app.rpu_busy;
-            if busy {
-                crate::gui::widgets::busy_status(ui, app.job_stages.get("rpu").map(String::as_str));
-            } else {
-                let action_text = if !installed {
-                    "Install".to_string()
-                } else if let Some(v) = &app.rpu_pending_update {
-                    format!("Update to {v}")
+            cover_thumbnail(ui, ce);
+            ui.vertical(|ui| {
+                let status = if installed {
+                    let version = load_rpu_state(&app.paths)
+                        .get("version")
+                        .cloned()
+                        .unwrap_or_else(|| "an unknown version".to_string());
+                    format!(
+                        "Installed ({version}). Restores cut content and fixes to Fallout 2, and brings its \
+                         officially-bundled NPC Armor, Party Orders and Unofficial Patch along with it, plus \
+                         its own optional extras (enhanced world map, new animations, Cassidy's voice/head, \
+                         ...) - all switched on individually below, never on the Mods page."
+                    )
                 } else {
-                    "Check for updates".to_string()
+                    "Restores cut content and fixes to Fallout 2 - not a separate campaign, just more of the \
+                     same game. Not installed yet."
+                        .to_string()
                 };
-                if ui.button(action_text).clicked() {
-                    on_action(app, installed);
-                }
-            }
-            if installed && ui.add_enabled(!busy, egui::Button::new("Uninstall")).clicked() {
-                app.pending_confirm = Some(PendingConfirm {
-                    title: "Uninstall Restoration Project".to_string(),
-                    message: "Remove RPU's files from mods/? This can't be undone.".to_string(),
-                    action: ConfirmAction::UninstallRpu,
+                ui.label(egui::RichText::new(status).color(theme::MUTED));
+                ui.add_space(6.0);
+
+                ui.horizontal(|ui| {
+                    if ui.button("Open source").clicked() {
+                        crate::gui::open::open(RPU_HOMEPAGE);
+                    }
+                    let busy = app.rpu_busy;
+                    if busy {
+                        crate::gui::widgets::busy_status(ui, app.job_stages.get("rpu").map(String::as_str));
+                    } else {
+                        let action_text = if !installed {
+                            "Install".to_string()
+                        } else if let Some(v) = &app.rpu_pending_update {
+                            format!("Update to {v}")
+                        } else {
+                            "Check for updates".to_string()
+                        };
+                        if ui.button(action_text).clicked() {
+                            on_action(app, installed);
+                        }
+                    }
+                    if installed && ui.add_enabled(!busy, egui::Button::new("Uninstall")).clicked() {
+                        app.pending_confirm = Some(PendingConfirm {
+                            title: "Uninstall Restoration Project".to_string(),
+                            message: "Remove RPU's files from mods/? This can't be undone.".to_string(),
+                            action: ConfirmAction::UninstallRpu,
+                        });
+                    }
                 });
-            }
+            });
         });
     });
     ui.add_space(12.0);

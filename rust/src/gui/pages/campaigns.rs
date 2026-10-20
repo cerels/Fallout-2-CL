@@ -182,8 +182,9 @@ fn campaign_card(app: &mut App, ui: &mut egui::Ui, campaign: &'static Campaign) 
 
 /// The campaign's cover art (see `GLOSSARY.md`'s "Cover art" entry), scaled down to a small
 /// store-tile thumbnail. Distinct from `campaign.badge` (the bracket-text code), which stays
-/// put everywhere else per ADR 0008 - this is additive, shown only here.
-fn cover_thumbnail(ui: &mut egui::Ui, campaign: &Campaign) {
+/// put everywhere else per ADR 0008 - this is additive, shown only here (and on RPU's own
+/// tab, which reuses CE's cover rather than getting its own - see `pages::rpu`).
+pub(crate) fn cover_thumbnail(ui: &mut egui::Ui, campaign: &Campaign) {
     let width = 84.0;
     ui.add(
         egui::Image::from_bytes(campaign.cover_uri, campaign.cover)
