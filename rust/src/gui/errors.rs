@@ -7,7 +7,10 @@
 /// Rewrite `raw` if it matches a known pattern, otherwise return it unchanged.
 pub(crate) fn friendly(raw: &str) -> String {
     let lower = raw.to_lowercase();
-    if lower.contains("master.dat") || lower.contains("pass path") {
+    // Only Et Tu's undat.sh/undat.bat's own two "bad file" messages - plenty of other errors
+    // merely mention MASTER.DAT (e.g. "run UNDAT.EXE ... point it at Fallout 1's MASTER.DAT"),
+    // and rewriting those would hide the real cause behind a wrong guess.
+    if lower.contains("pass path to fallout 1's master.dat") || lower.contains("can't read fallout 1's master.dat") {
         return "That doesn't look like Fallout 1's MASTER.DAT - check the path and try again.".to_string();
     }
     if lower.contains("timed out") || lower.contains("timeout") {
@@ -31,6 +34,7 @@ mod tests {
     #[test]
     fn maps_known_patterns() {
         assert!(friendly("Please pass path to Fallout 1's master.dat to the script.").contains("MASTER.DAT"));
+        assert!(friendly("Error: can't read Fallout 1's master.dat.").contains("doesn't look like"));
         assert!(friendly("request timed out after 20s").contains("timed out"));
         assert!(friendly("HTTP error: 404 Not Found").contains("couldn't be found"));
     }
@@ -38,5 +42,12 @@ mod tests {
     #[test]
     fn leaves_unrecognized_text_alone() {
         assert_eq!(friendly("disk full"), "disk full");
+    }
+
+    #[test]
+    fn leaves_other_errors_that_mention_master_dat_alone() {
+        let raw = "undat.bat not found in the Et Tu install - run UNDAT.EXE from the Fallout1in2 \
+                   folder yourself and point it at Fallout 1's MASTER.DAT.";
+        assert_eq!(friendly(raw), raw);
     }
 }
