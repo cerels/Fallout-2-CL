@@ -22,11 +22,27 @@ pub struct CatalogEntry {
     pub ini: Option<String>,
     /// Campaign ids whose Mods page offers this as a download (default: `["ce"]`).
     pub campaigns: Vec<String>,
+    /// Where this entry's zip is extracted, relative to the campaign root - `None` means the
+    /// usual drop-in-`mods/`-and-toggle-via-`mods_order.txt` behavior (every entry before this
+    /// field existed). `Some(dir)` means this entry isn't a "mod" the engine toggles at all -
+    /// it's content CE reads directly from `dir` (e.g. HQ music's loose `.acm` files under
+    /// `data/sound/music`) - so install/delete skip `mods_order.txt` entirely, and `dat`'s
+    /// files may collide by name with ones already there (see `backup_existing_files`).
+    pub extract_to: Option<String>,
 }
 
 impl CatalogEntry {
+    /// A `mods/`-backed entry is installed when its `dat` file/folder exists there, same as
+    /// ever. A flat (`extract_to`) entry can't use file presence - its files may share names
+    /// with ones the campaign already ships (HQ music overwrites Et Tu's own stock tracks) -
+    /// so it goes by this launcher's own install-state bookkeeping instead (see
+    /// `install_catalog_entry`'s version save).
     pub fn is_installed(&self, paths: &Paths) -> bool {
-        self.dat.iter().any(|d| paths.mod_installed(d))
+        if self.extract_to.is_some() {
+            load_catalog_state(paths).contains_key(&self.id)
+        } else {
+            self.dat.iter().any(|d| paths.mod_installed(d))
+        }
     }
 
     pub fn offered_for(&self, campaign_id: &str) -> bool {
@@ -65,6 +81,7 @@ fn parse_catalog_entry(e: &toml::Value) -> Option<CatalogEntry> {
             .and_then(|v| v.as_array())
             .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
             .unwrap_or_else(|| vec!["ce".to_string()]),
+        extract_to: e.get("extract_to").and_then(|v| v.as_str()).map(str::to_string),
     })
 }
 
@@ -184,27 +201,125 @@ pub fn check_for_update(paths: &Paths, entry: &CatalogEntry) -> Option<String> {
     }
 }
 
-/// Download `entry`'s file and place it under `mods/`. `on_stage` is called once the download
-/// finishes and installing begins - see `docs/adr/0006-indeterminate-download-progress.md`.
+/// Download `entry`'s file and place it under `mods/` (or, for an `extract_to` entry, under
+/// that campaign-relative folder instead - see `CatalogEntry::extract_to`). `on_stage` is
+/// called once the download finishes and installing begins - see
+/// `docs/adr/0006-indeterminate-download-progress.md`.
 pub fn install_catalog_entry(paths: &Paths, entry: &CatalogEntry, on_stage: &dyn Fn(&str)) -> Result<(), String> {
     let resolved = resolve_download(entry)?;
     let bytes = super::http::get_bytes(&resolved.url, std::time::Duration::from_secs(60))?;
     on_stage("Installing\u{2026}");
 
-    let mods_dir = paths.ci_path("mods", None);
-    std::fs::create_dir_all(&mods_dir).map_err(|e| e.to_string())?;
-
-    if entry.raw.is_some() {
-        std::fs::write(mods_dir.join(&entry.dat[0]), &bytes).map_err(|e| e.to_string())?;
+    if let Some(target) = &entry.extract_to {
+        let dest = paths.ci_path(target, None);
+        std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+        backup_existing_files(paths, &entry.id, &dest, &entry.dat)?;
+        extract_zip_flat(&bytes, &dest, &entry.name)?;
     } else {
-        extract_mods_from_zip(&bytes, &mods_dir, &entry.name)?;
+        let mods_dir = paths.ci_path("mods", None);
+        std::fs::create_dir_all(&mods_dir).map_err(|e| e.to_string())?;
+
+        if entry.raw.is_some() {
+            std::fs::write(mods_dir.join(&entry.dat[0]), &bytes).map_err(|e| e.to_string())?;
+        } else {
+            extract_mods_from_zip(&bytes, &mods_dir, &entry.name)?;
+        }
+
+        enable_mod_file(paths, &entry.dat[0]).map_err(|e| e.to_string())?;
     }
 
-    enable_mod_file(paths, &entry.dat[0]).map_err(|e| e.to_string())?;
     if let Some(version) = resolved.version {
         let mut state = load_catalog_state(paths);
         state.insert(entry.id.clone(), version);
         save_catalog_state(paths, &state).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Where a flat (`extract_to`) entry's pre-install files are preserved - see
+/// `backup_existing_files`/`delete_flat_entry_files`.
+fn content_backup_dir(paths: &Paths, entry_id: &str) -> PathBuf {
+    paths.backup_dir().join("content-backups").join(entry_id)
+}
+
+/// Before a flat entry overwrites `dest` with downloaded content, preserve whatever was
+/// already there under any of `dat`'s names - HQ music's files share names with Et Tu's own
+/// stock tracks, so without this, installing is a silent one-way loss of the originals. Only
+/// the *first* install snapshots anything: a later Update must never re-backup, or it would
+/// capture the installed content itself as the "original" and the real pre-install files would
+/// be gone for good.
+fn backup_existing_files(paths: &Paths, entry_id: &str, dest: &Path, dat: &[String]) -> Result<(), String> {
+    let backup_dir = content_backup_dir(paths, entry_id);
+    if backup_dir.is_dir() {
+        return Ok(());
+    }
+    for name in dat {
+        let src = dest.join(name);
+        if src.is_file() {
+            std::fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+            std::fs::copy(&src, backup_dir.join(name)).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+/// Remove a flat entry's files from `target` (a campaign-relative folder, e.g.
+/// `data/sound/music`): restores whatever `backup_existing_files` preserved, if anything did
+/// collide, or just deletes `dat`'s files if nothing did. Returns the paths touched (restored
+/// or removed), same shape as `delete_mod_files`.
+pub fn delete_flat_entry_files(paths: &Paths, entry_id: &str, target: &str, dat: &[String]) -> Vec<PathBuf> {
+    let dest = paths.ci_path(target, None);
+    let backup_dir = content_backup_dir(paths, entry_id);
+    let mut touched = Vec::new();
+    if backup_dir.is_dir() {
+        for name in dat {
+            let live = dest.join(name);
+            let backed_up = backup_dir.join(name);
+            let restored = if backed_up.is_file() { std::fs::copy(&backed_up, &live).is_ok() } else { false };
+            if !restored && live.is_file() {
+                let _ = std::fs::remove_file(&live);
+            }
+            touched.push(live);
+        }
+        let _ = std::fs::remove_dir_all(&backup_dir);
+    } else {
+        for name in dat {
+            let p = dest.join(name);
+            if p.is_file() && std::fs::remove_file(&p).is_ok() {
+                touched.push(p);
+            }
+        }
+    }
+    touched
+}
+
+/// Copies every file in a downloaded zip directly under `dest`, preserving each entry's own
+/// relative path - unlike `extract_mods_from_zip`, there's no `mods/`-prefix to strip, because
+/// a flat (`extract_to`) entry's archive is just its content as-is (e.g. HQ music's `.acm`
+/// files sit at the zip's root, meant to land straight in `data/sound/music`).
+fn extract_zip_flat(bytes: &[u8], dest: &Path, entry_name: &str) -> Result<(), String> {
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
+    let mut copied = 0;
+    for i in 0..zip.len() {
+        let mut file = zip.by_index(i).map_err(|e| e.to_string())?;
+        if file.is_dir() {
+            continue;
+        }
+        let rel: Vec<String> =
+            file.name().replace('\\', "/").split('/').filter(|p| !p.is_empty()).map(str::to_string).collect();
+        if rel.is_empty() {
+            continue;
+        }
+        let out_path = dest.join(rel.join("/"));
+        if let Some(parent) = out_path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let mut out = std::fs::File::create(&out_path).map_err(|e| e.to_string())?;
+        io::copy(&mut file, &mut out).map_err(|e| e.to_string())?;
+        copied += 1;
+    }
+    if copied == 0 {
+        return Err(format!("{entry_name}: archive was empty"));
     }
     Ok(())
 }
@@ -326,6 +441,13 @@ mod tests {
         assert!(party_orders.offered_for("ettu"));
         let fo2tweaks = entries.iter().find(|e| e.id == "fo2tweaks").expect("fo2tweaks entry");
         assert!(fo2tweaks.offered_for("ettu"));
+        // HQ music is a flat (extract_to) entry, scoped to Et Tu only - see
+        // schemas/catalog.toml's comment on why not Vanilla/CE too.
+        let hq_music = entries.iter().find(|e| e.id == "hq-music").expect("hq-music entry");
+        assert_eq!(hq_music.extract_to.as_deref(), Some("data/sound/music"));
+        assert!(hq_music.offered_for("ettu"));
+        assert!(!hq_music.offered_for("ce"));
+        assert_eq!(hq_music.dat.len(), 31);
     }
 
     #[test]
@@ -334,6 +456,26 @@ mod tests {
         assert!(!fnmatch_simple("*.zip", "npc-armor-v1.2.0.tar.gz"));
         assert!(fnmatch_simple("exact.name", "exact.name"));
         assert!(!fnmatch_simple("exact.name", "other.name"));
+    }
+
+    #[test]
+    fn fnmatch_simple_hq_music_pattern_picks_only_the_hq_asset() {
+        // The real BGforgeNet/Fallout2-HQ-music release ships these 8 assets (4 zips + their
+        // .torrent files) under one release - "*hq*.zip" must land on exactly one.
+        let pattern = "*hq*.zip".to_lowercase();
+        let assets = [
+            "fallout_music_hq_v8.1.zip",
+            "fallout_music_hq_v8.1.zip.torrent",
+            "fallout_music_lossless_flac_v8.1.zip",
+            "fallout_music_lossless_flac_v8.1.zip.torrent",
+            "fallout_music_lossless_wavpack_v8.1.zip",
+            "fallout_music_lossless_wavpack_v8.1.zip.torrent",
+            "fallout_music_lossless_wav_v8.1.zip",
+            "fallout_music_lossless_wav_v8.1.zip.torrent",
+        ];
+        let matches: Vec<&str> =
+            assets.iter().filter(|a| fnmatch_simple(&pattern, &a.to_lowercase())).copied().collect();
+        assert_eq!(matches, vec!["fallout_music_hq_v8.1.zip"]);
     }
 
     #[test]
@@ -369,6 +511,7 @@ mod tests {
             raw: None,
             ini: None,
             campaigns: vec!["ce".into()],
+            extract_to: None,
         };
         let err = resolve_download(&entry).unwrap_err();
         assert!(err.contains("neither github nor raw"));
@@ -387,6 +530,7 @@ mod tests {
             raw: Some("https://example.com/f2_res.dat".into()),
             ini: None,
             campaigns: vec!["ce".into()],
+            extract_to: None,
         };
         let resolved = resolve_download(&entry).unwrap();
         assert_eq!(resolved.url, "https://example.com/f2_res.dat");
@@ -467,6 +611,118 @@ mod tests {
         }
         let tmp = tempfile::tempdir().unwrap();
         assert!(extract_mods_from_zip(&buf, tmp.path(), "Something").is_err());
+    }
+
+    #[test]
+    fn extract_zip_flat_copies_entries_at_the_zips_own_root_with_no_prefix_stripping() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut buf = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let opts = zip::write::SimpleFileOptions::default();
+            writer.start_file("01hub.acm", opts).unwrap();
+            writer.write_all(b"hq audio").unwrap();
+            writer.finish().unwrap();
+        }
+        extract_zip_flat(&buf, tmp.path(), "HQ Music").unwrap();
+        assert_eq!(std::fs::read(tmp.path().join("01hub.acm")).unwrap(), b"hq audio");
+    }
+
+    #[test]
+    fn extract_zip_flat_errors_on_an_empty_archive() {
+        let mut buf = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            writer.add_directory("empty_dir/", zip::write::SimpleFileOptions::default()).unwrap();
+            writer.finish().unwrap();
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(extract_zip_flat(&buf, tmp.path(), "Something").is_err());
+    }
+
+    #[test]
+    fn flat_entry_install_then_delete_restores_the_file_it_overwrote() {
+        // HQ music overwrites Et Tu's own stock .acm files by name - deleting it later must
+        // give the original back, not just leave the music folder empty.
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let music_dir = tmp.path().join("data/sound/music");
+        std::fs::create_dir_all(&music_dir).unwrap();
+        std::fs::write(music_dir.join("01hub.acm"), b"stock 22khz").unwrap();
+
+        backup_existing_files(&paths, "hq-music", &music_dir, &["01hub.acm".to_string()]).unwrap();
+        std::fs::write(music_dir.join("01hub.acm"), b"hq 44khz").unwrap(); // simulates extract_zip_flat
+
+        delete_flat_entry_files(&paths, "hq-music", "data/sound/music", &["01hub.acm".to_string()]);
+
+        assert_eq!(std::fs::read(music_dir.join("01hub.acm")).unwrap(), b"stock 22khz");
+        assert!(!content_backup_dir(&paths, "hq-music").exists());
+    }
+
+    #[test]
+    fn flat_entry_backup_is_not_overwritten_by_a_later_update() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let music_dir = tmp.path().join("data/sound/music");
+        std::fs::create_dir_all(&music_dir).unwrap();
+        std::fs::write(music_dir.join("01hub.acm"), b"stock 22khz").unwrap();
+
+        backup_existing_files(&paths, "hq-music", &music_dir, &["01hub.acm".to_string()]).unwrap();
+        std::fs::write(music_dir.join("01hub.acm"), b"hq v8.0").unwrap();
+        // A later Update re-runs backup_existing_files - it must be a no-op now, or the
+        // real original would be lost, replaced by this already-installed HQ content.
+        backup_existing_files(&paths, "hq-music", &music_dir, &["01hub.acm".to_string()]).unwrap();
+        std::fs::write(music_dir.join("01hub.acm"), b"hq v8.1").unwrap();
+
+        delete_flat_entry_files(&paths, "hq-music", "data/sound/music", &["01hub.acm".to_string()]);
+        assert_eq!(std::fs::read(music_dir.join("01hub.acm")).unwrap(), b"stock 22khz");
+    }
+
+    #[test]
+    fn flat_entry_delete_with_no_prior_collision_just_removes_the_files() {
+        // Nothing was there before install (no backup slot ever created), so delete has
+        // nothing to restore - it should simply remove what it added.
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let music_dir = tmp.path().join("data/sound/music");
+        std::fs::create_dir_all(&music_dir).unwrap();
+        std::fs::write(music_dir.join("wind1.acm"), b"hq only track").unwrap();
+
+        delete_flat_entry_files(&paths, "hq-music", "data/sound/music", &["wind1.acm".to_string()]);
+
+        assert!(!music_dir.join("wind1.acm").exists());
+    }
+
+    #[test]
+    fn flat_entry_is_installed_goes_by_launcher_state_not_file_presence() {
+        // File presence can't tell HQ music apart from the stock tracks it overwrites by
+        // name - CatalogEntry::is_installed must use the install-state file instead.
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::new(tmp.path().to_path_buf());
+        let entry = CatalogEntry {
+            id: "hq-music".into(),
+            name: "HQ Music".into(),
+            description: String::new(),
+            homepage: String::new(),
+            dat: vec!["01hub.acm".into()],
+            github: Some("BGforgeNet/Fallout2-HQ-music".into()),
+            asset: "*hq*.zip".into(),
+            raw: None,
+            ini: None,
+            campaigns: vec!["ettu".into()],
+            extract_to: Some("data/sound/music".into()),
+        };
+        // The same filename already exists (Et Tu's own stock track) - must not read as
+        // "HQ music is installed" on its own.
+        let music_dir = tmp.path().join("data/sound/music");
+        std::fs::create_dir_all(&music_dir).unwrap();
+        std::fs::write(music_dir.join("01hub.acm"), b"stock").unwrap();
+        assert!(!entry.is_installed(&paths));
+
+        let mut state = BTreeMap::new();
+        state.insert("hq-music".to_string(), "v8.1".to_string());
+        save_catalog_state(&paths, &state).unwrap();
+        assert!(entry.is_installed(&paths));
     }
 
     #[test]

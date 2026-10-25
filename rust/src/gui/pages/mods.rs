@@ -8,8 +8,8 @@ use std::collections::{HashMap, HashSet};
 use eframe::egui;
 
 use crate::backend::mod_catalog::{
-    check_for_update, delete_mod_files, install_catalog_entry, load_catalog_state, save_catalog_state,
-    CatalogEntry,
+    check_for_update, delete_flat_entry_files, delete_mod_files, install_catalog_entry, load_catalog_state,
+    save_catalog_state, CatalogEntry,
 };
 use crate::backend::paths::SharedPaths;
 use crate::gui::app::{App, ConfirmAction, PendingConfirm};
@@ -23,6 +23,10 @@ pub(crate) struct ModRow {
     pub(crate) dat: String,
     pub(crate) enabled: bool,
     pub(crate) installed: bool,
+    /// False for a flat (`extract_to`) catalog entry, e.g. HQ music: it has no
+    /// `mods_order.txt` line to toggle or reorder, so the checkbox and \u{25b2}/\u{25bc}
+    /// buttons don't apply - Download/Update/Delete still do.
+    pub(crate) orderable: bool,
     entry: Option<CatalogEntry>,
     subtitle: String,
 }
@@ -97,7 +101,7 @@ impl ModsPage {
                         .as_ref()
                         .map(|e| e.description.clone())
                         .unwrap_or_else(|| mod_info.get(&lower).cloned().unwrap_or_default());
-                    self.rows.push(ModRow { dat: name, enabled, installed: true, entry, subtitle });
+                    self.rows.push(ModRow { dat: name, enabled, installed: true, orderable: true, entry, subtitle });
                     seen.insert(lower);
                 }
             }
@@ -118,20 +122,35 @@ impl ModsPage {
                     if seen.contains(&lower) || lower == "f2_res.dat" {
                         continue;
                     }
-                    self.rows.push(ModRow { dat: name, enabled: false, installed: true, entry: None, subtitle: String::new() });
+                    self.rows.push(ModRow {
+                        dat: name,
+                        enabled: false,
+                        installed: true,
+                        orderable: true,
+                        entry: None,
+                        subtitle: String::new(),
+                    });
                     seen.insert(lower);
                 }
             }
         }
 
         for entry in mod_catalog {
-            if !entry.offered_for(campaign_id) || entry.is_installed(paths) {
+            if !entry.offered_for(campaign_id) {
+                continue;
+            }
+            let installed = entry.is_installed(paths);
+            // A `mods/`-backed entry that's installed is already in `self.rows` from the
+            // `mods_order.txt` scan above - only a flat (`extract_to`) entry needs adding
+            // here even when installed, since it has no `mods_order.txt` line of its own.
+            if installed && entry.extract_to.is_none() {
                 continue;
             }
             self.rows.push(ModRow {
                 dat: entry.dat[0].clone(),
                 enabled: false,
-                installed: false,
+                installed,
+                orderable: entry.extract_to.is_none(),
                 subtitle: entry.description.clone(),
                 entry: Some(entry.clone()),
             });
@@ -140,8 +159,10 @@ impl ModsPage {
         self.initial = self.serialize();
     }
 
+    /// Only `mods_order.txt`-backed rows - a flat (`extract_to`) entry has no line there to
+    /// serialize, and must never gain one (see `ModRow::orderable`).
     fn serialize(&self) -> Vec<(String, bool)> {
-        self.rows.iter().filter(|r| r.installed).map(|r| (r.dat.clone(), r.enabled)).collect()
+        self.rows.iter().filter(|r| r.installed && r.orderable).map(|r| (r.dat.clone(), r.enabled)).collect()
     }
 
     pub fn dirty_count(&self) -> usize {
@@ -226,7 +247,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     }
 
     ui.horizontal(|ui| {
-        let can_move = app.mods.rows.iter().position(|r| r.installed).is_some();
+        let can_move = app.mods.rows.iter().any(|r| r.installed && r.orderable);
         ui.add_enabled_ui(can_move, |ui| {
             if ui.button("Move up").clicked() {
                 move_row(app, -1);
@@ -270,7 +291,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             shown += 1;
             ui.horizontal(|ui| {
-                if row.installed {
+                if row.installed && row.orderable {
                     let mut enabled = row.enabled;
                     if ui.checkbox(&mut enabled, "").changed() {
                         app.mods.rows[i].enabled = enabled;
@@ -312,12 +333,12 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             crate::gui::open::open(&entry.homepage);
                         }
                     }
-                    if i > 0 && row.installed {
+                    if i > 0 && row.installed && row.orderable {
                         if ui.small_button("\u{25b2}").clicked() {
                             move_requested = Some((i, -1));
                         }
                     }
-                    if row.installed && i + 1 < rows.len() {
+                    if row.installed && row.orderable && i + 1 < rows.len() {
                         if ui.small_button("\u{25bc}").clicked() {
                             move_requested = Some((i, 1));
                         }
@@ -346,7 +367,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 fn move_row(app: &mut App, delta: i32) {
     // "Move up/down" toolbar buttons act on the first installed row for simplicity; the
     // per-row ▲/▼ buttons (drawn in `show`) are the precise way to reorder a specific mod.
-    if let Some(i) = app.mods.rows.iter().position(|r| r.installed) {
+    if let Some(i) = app.mods.rows.iter().position(|r| r.installed && r.orderable) {
         let j = i as i32 + delta;
         if j >= 0 && (j as usize) < app.mods.rows.len() {
             app.mods.rows.swap(i, j as usize);
@@ -388,20 +409,52 @@ impl App {
     }
 
     fn confirm_delete_mod(&mut self, row: ModRow) {
-        let extra: Vec<String> = row.entry.as_ref().and_then(|e| e.ini.clone()).into_iter().collect();
-        let listed = std::iter::once(row.dat.clone()).chain(extra.iter().cloned()).collect::<Vec<_>>().join(", ");
+        let extract_to = row.entry.as_ref().and_then(|e| e.extract_to.clone());
+        let message = if let Some(dir) = &extract_to {
+            // A flat entry's `dat` can be dozens of filenames (HQ music's 31 tracks) - too
+            // many to list - so name the entry and target folder instead of every file.
+            let title = row.entry.as_ref().map(|e| e.name.clone()).unwrap_or_else(|| row.dat.clone());
+            format!(
+                "Remove {title} from {dir}/? Files it replaced will be restored if a backup of them was kept."
+            )
+        } else {
+            let extra: Vec<String> = row.entry.as_ref().and_then(|e| e.ini.clone()).into_iter().collect();
+            let listed = std::iter::once(row.dat.clone()).chain(extra.iter().cloned()).collect::<Vec<_>>().join(", ");
+            format!("Remove {listed} from mods/? This can't be undone.")
+        };
+        let extra: Vec<String> = match (&extract_to, &row.entry) {
+            (Some(_), Some(entry)) => entry.dat.iter().skip(1).cloned().collect(),
+            (None, Some(entry)) => entry.ini.clone().into_iter().collect(),
+            _ => Vec::new(),
+        };
         self.pending_confirm = Some(PendingConfirm {
             title: "Delete mod".to_string(),
-            message: format!("Remove {listed} from mods/? This can't be undone."),
-            action: ConfirmAction::DeleteMod { dat: row.dat, extra, catalog_id: row.entry.map(|e| e.id) },
+            message,
+            action: ConfirmAction::DeleteMod { dat: row.dat, extra, catalog_id: row.entry.map(|e| e.id), extract_to },
         });
     }
 }
 
 /// Carries out a mod deletion the player already confirmed via the `ConfirmAction::DeleteMod`
 /// modal (see `app.rs`'s confirm-dialog handling).
-pub(crate) fn delete_mod_now(app: &mut App, dat: &str, extra: &[String], catalog_id: Option<String>) {
-    delete_mod_files(&app.paths, dat, extra);
+pub(crate) fn delete_mod_now(
+    app: &mut App,
+    dat: &str,
+    extra: &[String],
+    catalog_id: Option<String>,
+    extract_to: Option<String>,
+) {
+    match extract_to {
+        Some(target) => {
+            let entry_id = catalog_id.clone().unwrap_or_default();
+            let mut names = vec![dat.to_string()];
+            names.extend(extra.iter().cloned());
+            delete_flat_entry_files(&app.paths, &entry_id, &target, &names);
+        }
+        None => {
+            delete_mod_files(&app.paths, dat, extra);
+        }
+    }
     if let Some(id) = catalog_id {
         let mut state = load_catalog_state(&app.paths);
         if state.remove(&id).is_some() {

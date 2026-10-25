@@ -30,7 +30,7 @@ pub(crate) enum ConfirmAction {
     InstallCeThenPlay,
     AddCampaignToSteam(&'static Campaign),
     UninstallRpu,
-    DeleteMod { dat: String, extra: Vec<String>, catalog_id: Option<String> },
+    DeleteMod { dat: String, extra: Vec<String>, catalog_id: Option<String>, extract_to: Option<String> },
     Discard,
     SwitchCampaign(&'static Campaign),
 }
@@ -362,8 +362,8 @@ impl App {
                 delete_rpu(&self.paths);
                 self.needs_reload = true;
             }
-            ConfirmAction::DeleteMod { dat, extra, catalog_id } => {
-                pages::mods::delete_mod_now(self, &dat, &extra, catalog_id)
+            ConfirmAction::DeleteMod { dat, extra, catalog_id, extract_to } => {
+                pages::mods::delete_mod_now(self, &dat, &extra, catalog_id, extract_to)
             }
         }
     }

@@ -19,6 +19,14 @@
 # so entries it also names as working out of the box (Party Orders, FO2Tweaks)
 # are scoped to "ettu" too — see the Et Tu additional-content research this was
 # added from.
+#
+# `extract_to` is for an entry that isn't a drop-in-mods/-and-toggle "mod" at
+# all — it's content CE reads directly from that campaign-relative folder, so
+# the zip's files land there as-is (no mods/ prefix to strip) and there's no
+# mods_order.txt line. HQ Music is scoped to "ettu" only because Et Tu's own
+# fallout2.cfg already points music_path1 at data/sound/music/ — Vanilla/CE's
+# default (sound/music/, no data/ prefix) doesn't match, so this would land in
+# the wrong place there until that's handled per-campaign too.
 
 [[entry]]
 id = "npc-armor"
@@ -56,3 +64,20 @@ description = "Graphics assets CE needs for the expanded interface bar and barte
 homepage = "https://github.com/fallout2-ce/fallout2-ce"
 raw = "https://github.com/fallout2-ce/fallout2-ce/raw/refs/heads/main/files/f2_res.dat"
 dat = ["f2_res.dat"]
+
+[[entry]]
+id = "hq-music"
+name = "High Quality Music"
+description = "44.1 kHz music (~370MB), replacing Et Tu's default 22 kHz tracks by filename."
+homepage = "https://github.com/BGforgeNet/Fallout2-HQ-music"
+github = "BGforgeNet/Fallout2-HQ-music"
+asset = "*hq*.zip"
+extract_to = "data/sound/music"
+campaigns = ["ettu"]
+dat = [
+    "01hub.acm", "02mstrlr.acm", "03world.acm", "03wrldmp.acm", "04brthrh.acm", "05raider.acm",
+    "06vault.acm", "07desert.acm", "08vats.acm", "09glow.acm", "10labone.acm", "11chilrn.acm",
+    "12junktn.acm", "13carvrn.acm", "14necro.acm", "15shady.acm", "16follow.acm", "17arroyo.acm",
+    "18modoc.acm", "19reno.acm", "20car.acm", "21sf.acm", "22vcity.acm", "23world.acm",
+    "24redd.acm", "abbey1.acm", "akiss.acm", "maybe.acm", "prmtribe.acm", "wind1.acm", "wind2.acm",
+]
