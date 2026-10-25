@@ -12,9 +12,10 @@
 //!
 //! - Et Tu needs Fallout 1's own data, which this can never download on its own (that would
 //!   mean distributing someone else's purchased game). The release bundles the official
-//!   conversion tool (`undat.sh`/`UNDAT.EXE`) for pulling the handful of files it actually
-//!   needs out of a Fallout 1 install's MASTER.DAT; `extract_fallout1_data` runs it, but
-//!   only once the user points it at a Fallout 1 copy they already own.
+//!   conversion tools (`undat.sh`/`undat.bat`, plus the GUI `UNDAT.EXE`) for pulling the
+//!   handful of files it actually needs out of a Fallout 1 install's MASTER.DAT;
+//!   `extract_fallout1_data` runs the command-line one, but only once the user points it at
+//!   a Fallout 1 copy they already own.
 
 use std::collections::{BTreeMap, HashSet};
 use std::io::{self, Read};
@@ -151,7 +152,7 @@ struct CommandOutput {
 
 /// Runs `program` and waits up to `timeout`, killing it if it runs longer. Reads stdout/
 /// stderr only after the process exits - fine for a script that prints a few status lines,
-/// which is all `undat.sh` ever does; a chattier child could in principle fill its pipe
+/// which is all `undat.sh`/`undat.bat` ever do; a chattier child could in principle fill its pipe
 /// buffer and stall before then, but that's not a shape this script takes.
 fn run_with_timeout(
     program: &Path,
@@ -159,13 +160,17 @@ fn run_with_timeout(
     cwd: &Path,
     timeout: Duration,
 ) -> Result<CommandOutput, String> {
-    let mut child = Command::new(program)
-        .args(args)
-        .current_dir(cwd)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let mut command = Command::new(program);
+    command.args(args).current_dir(cwd).stdout(Stdio::piped()).stderr(Stdio::piped());
+    // The launcher is a GUI-subsystem app, so running undat.bat would otherwise flash up a
+    // console window of its own.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let mut child = command.spawn().map_err(|e| e.to_string())?;
 
     let deadline = std::time::Instant::now() + timeout;
     loop {
@@ -189,21 +194,25 @@ fn run_with_timeout(
     }
 }
 
-/// Run Et Tu's bundled `undat.sh` against a Fallout 1 install's MASTER.DAT - Linux/macOS
-/// only; on Windows the equivalent (`UNDAT.EXE`) is a GUI tool with no command-line form, so
-/// there's nothing to automate there.
+/// Et Tu's command-line extractor for this OS: `undat.sh` (runs `utils/dat3`) everywhere
+/// but Windows, where it's `undat.bat` (runs `utils/dat2.exe`) instead.
+const UNDAT_SCRIPT: &str = if cfg!(windows) { "undat.bat" } else { "undat.sh" };
+
+/// Run Et Tu's bundled `undat.sh`/`undat.bat` against a Fallout 1 install's MASTER.DAT.
 pub fn extract_fallout1_data(paths: &Paths, master_dat: &Path) -> Result<(), String> {
-    if cfg!(windows) {
-        return Err("Automatic extraction isn't available on Windows - run UNDAT.EXE from the \
-                     Fallout1in2 folder yourself and point it at Fallout 1's MASTER.DAT."
-            .to_string());
-    }
     if !is_installed(paths) {
         return Err("Et Tu isn't installed yet - install it first.".to_string());
     }
     let root = ettu_root(paths);
-    let script = paths.ci_path("undat.sh", Some(&root));
+    let script = paths.ci_path(UNDAT_SCRIPT, Some(&root));
     if !script.is_file() {
+        // Older Et Tu releases only shipped the GUI UNDAT.EXE on Windows - no command-line
+        // form to automate - so point at that instead of a dead end.
+        if cfg!(windows) {
+            return Err("undat.bat not found in the Et Tu install - run UNDAT.EXE from the \
+                         Fallout1in2 folder yourself and point it at Fallout 1's MASTER.DAT."
+                .to_string());
+        }
         return Err("undat.sh not found in the Et Tu install - it may be a newer/older release \
                      with a different layout than this launcher expects."
             .to_string());
@@ -223,7 +232,7 @@ pub fn extract_fallout1_data(paths: &Paths, master_dat: &Path) -> Result<(), Str
             .into_iter()
             .map(|s| s.trim())
             .find(|s| !s.is_empty())
-            .unwrap_or("undat.sh failed");
+            .unwrap_or("Extracting Fallout 1's data failed");
         return Err(message.to_string());
     }
 
@@ -315,11 +324,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());
         let err = extract_fallout1_data(&paths, Path::new("/fake/MASTER.DAT")).unwrap_err();
-        if cfg!(windows) {
-            assert!(err.contains("UNDAT.EXE"));
-        } else {
-            assert!(err.contains("isn't installed"));
-        }
+        assert!(err.contains("isn't installed"));
     }
 
     #[cfg(unix)]

@@ -1,0 +1,60 @@
+name: Auto release
+
+# Pushing launcher changes to main bumps the version, tags it, and kicks off
+# build.yml against that tag -- no manual version edit or tag push needed.
+#
+# A tag pushed here with GITHUB_TOKEN won't trigger build.yml's own tag
+# listener (GitHub doesn't cascade GITHUB_TOKEN-authored pushes into new
+# workflow runs), so the last step dispatches build.yml directly instead.
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["rust/**"]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: "${{ !startsWith(github.event.head_commit.message, 'chore: release v') }}"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: version
+        run: |
+          base="$(date -u +%Y).$(date -u +%-m).$(date -u +%-d)"
+          version="$base"
+          n=2
+          while git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; do
+            version="$base-$n"
+            n=$((n + 1))
+          done
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Bump Cargo.toml and Cargo.lock
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          sed -i "0,/^version = \".*\"/s//version = \"$version\"/" rust/Cargo.toml
+          perl -0777pi -e "s/(name = \"f2launcher\"\nversion = \")[^\"]*(\")/\${1}${version}\${2}/" rust/Cargo.lock
+
+      - name: Commit and tag
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add rust/Cargo.toml rust/Cargo.lock
+          git commit -m "chore: release v$version"
+          git tag "v$version"
+          git push origin HEAD:main
+          git push origin "v$version"
+
+      - name: Trigger release build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --ref "v${{ steps.version.outputs.version }}"
