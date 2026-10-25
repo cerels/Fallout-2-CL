@@ -1104,7 +1104,7 @@ dependencies = [
 
 [[package]]
 name = "f2launcher"
-version = "0.1.4"
+version = "2026.10.25"
 dependencies = [
  "eframe",
  "egui",
