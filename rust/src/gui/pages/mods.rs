@@ -173,18 +173,6 @@ impl ModsPage {
         }
     }
 
-    /// Discard in-memory reordering/toggling by re-reading from disk - `mods_order.txt`
-    /// itself is the only source of truth, so "revert" and "rebuild" are the same thing.
-    pub fn revert(
-        &mut self,
-        paths: &SharedPaths,
-        mod_catalog: &[CatalogEntry],
-        mod_info: &HashMap<String, String>,
-        campaign_id: &str,
-    ) {
-        self.rebuild(paths, mod_catalog, mod_info, campaign_id);
-    }
-
     pub fn save(&mut self, paths: &SharedPaths) -> Result<(), String> {
         if self.dirty_count() == 0 {
             return Ok(());

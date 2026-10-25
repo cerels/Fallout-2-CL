@@ -131,13 +131,6 @@ impl Store {
         self.dirty_ids().len()
     }
 
-    pub fn revert(&mut self) {
-        for sid in self.dirty_ids() {
-            let initial = self.initial[&sid].clone();
-            self.current.insert(sid, initial);
-        }
-    }
-
     /// Write every pending change to disk, backing up each touched file's previous content
     /// first (once per save, under `backup_dir()/<timestamp>/...`). Returns an error message
     /// on failure, matching Python's `Store.save`.

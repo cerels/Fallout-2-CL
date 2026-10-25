@@ -31,7 +31,6 @@ pub(crate) enum ConfirmAction {
     AddCampaignToSteam(&'static Campaign),
     UninstallRpu,
     DeleteMod { dat: String, extra: Vec<String>, catalog_id: Option<String>, extract_to: Option<String> },
-    Discard,
     SwitchCampaign(&'static Campaign),
 }
 
@@ -223,6 +222,19 @@ impl App {
         Ok(())
     }
 
+    /// Writes out any pending settings/mods edits every frame, so changes take effect as soon
+    /// as they're made and there's nothing to click. Skipped while an error dialog is already
+    /// up so a save that keeps failing (e.g. a locked config file) doesn't spam a new dialog
+    /// every frame - the next edit (or closing the dialog) gives it another chance.
+    fn autosave(&mut self) {
+        if self.dirty_count() == 0 || self.error_dialog.is_some() {
+            return;
+        }
+        if let Err(e) = self.save_all() {
+            self.error_dialog = Some(("Couldn't save settings".to_string(), super::errors::friendly(&e)));
+        }
+    }
+
     /// Entry point every "switch campaign" button should call instead of `switch_campaign`
     /// directly - asks first when there's something unsaved to lose, since switching reloads
     /// the whole settings/mods page set for the new campaign (see `switch_campaign`'s doc
@@ -340,10 +352,6 @@ impl App {
 
     fn apply_confirm(&mut self, action: ConfirmAction, ctx: &egui::Context) {
         match action {
-            ConfirmAction::Discard => {
-                self.store.revert();
-                self.mods.revert(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info, self.campaign.id);
-            }
             ConfirmAction::SwitchCampaign(campaign) => self.switch_campaign(ctx, campaign),
             ConfirmAction::InstallCeThenPlay => {
                 self.ce_installing = true;
@@ -459,6 +467,7 @@ impl eframe::App for App {
                 self.draw_current_page(ui, &ctx);
             });
         });
+        self.autosave();
         self.draw_modals(&ctx);
 
         if self.want_close {
@@ -478,22 +487,7 @@ impl App {
                 ui.horizontal_centered(|ui| {
                     let dirty = self.dirty_count();
                     if dirty > 0 {
-                        ui.label(
-                            theme::mono_bold(format!("\u{25cf} {dirty} UNSAVED"))
-                                .color(theme::AMBER),
-                        );
-                        if ui.button(theme::mono("[ SAVE ]")).clicked() {
-                            if let Err(e) = self.save_all() {
-                                self.error_dialog = Some(("Couldn't save settings".to_string(), super::errors::friendly(&e)));
-                            }
-                        }
-                        if ui.button(theme::mono("[ DISCARD ]")).clicked() {
-                            self.pending_confirm = Some(PendingConfirm {
-                                title: "Discard changes".to_string(),
-                                message: format!("Throw away {dirty} unsaved change{}? This can't be undone.", if dirty == 1 { "" } else { "s" }),
-                                action: ConfirmAction::Discard,
-                            });
-                        }
+                        ui.label(theme::mono_bold("\u{25cf} SAVING\u{2026}").color(theme::AMBER));
                     } else {
                         ui.label(theme::mono("ALL SAVED").color(theme::MUTED));
                     }
