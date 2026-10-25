@@ -1,0 +1,80 @@
+# Descriptions for the mini-mods that ship inside Et Tu's own release zip
+# (mods/<folder>, toggled via that campaign's mods_order.txt - see ettu_install.rs).
+# These aren't separately downloadable, so there's no [[entry]] for them in
+# catalog.toml - just [[mod]] entries so the Mods page has a description to
+# show (as a hover tooltip) for each row. No [files]/[[group]] here: this
+# contributes nothing to any Settings page, only to `Catalog.mod_info`.
+# Summarized from each mod's own README at
+# https://github.com/rotators/Fo1in2/tree/master/Fallout2/Fallout1in2/mods.
+
+[[mod]]
+dat = "fo1_base"
+description = "Base content for Fallout et Tu. Required - must always load first."
+
+[[mod]]
+dat = "fo1_interface"
+description = "Replaces the Fallout 2 interface with Fallout 1's original graphics."
+
+[[mod]]
+dat = "Anim_ImprovedSMutantDeath"
+description = "Resizes the super mutant/power armor death animations to match their normal scale."
+
+[[mod]]
+dat = "fo1_maps_mountains"
+description = "Widens the mountain encounter maps so 1280x720 shows no black bars."
+
+[[mod]]
+dat = "InterfaceUpscaled"
+description = "Higher-resolution town/world art, splash screens, death screen and endgame slides."
+
+[[mod]]
+dat = "fo1_barter_formula"
+description = "Reverts the barter price formula and merchant prices to Fallout 1's."
+
+[[mod]]
+dat = "InventoryAPcosts"
+description = "Inventory opens for free; using it costs 2 AP; limits Quick Pockets to 1 rank."
+
+[[mod]]
+dat = "fo1_robodog"
+description = "Turns Dogmeat into a Robodog, with slightly different combat options."
+
+[[mod]]
+dat = "ShowLootWeight"
+description = "Shows current/max carry weight on the loot screen. Redundant on CE - it already does this natively, and the mod disables itself there."
+
+[[mod]]
+dat = "fo1_alternative_forcefields"
+description = "Replaces the vanilla force fields with animated ones from Mutants Rising."
+
+[[mod]]
+dat = "fo1_new_premades"
+description = "New premade starting characters (Kenneth, Louis, Sarah) with new portrait art."
+
+[[mod]]
+dat = "fo1_v15_rework"
+description = "Redesigns the Vault 15 entrance maps to better match Fallout 2's version of Vault 15."
+
+[[mod]]
+dat = "fo1_footprints"
+description = "Leaves footprints in soft sand while walking."
+
+[[mod]]
+dat = "fo1_alternative_Junktown_Endings"
+description = "Restores the original Killian/Gizmo ending slide text for Junktown, with new narrator lines."
+
+[[mod]]
+dat = "character_randomizer"
+description = "Rolls a random starting character for you. Needs Fo2 + Sfall - not supported on CE."
+
+[[mod]]
+dat = "fo1_lang_german"
+description = "German translation of Fallout et Tu."
+
+[[mod]]
+dat = "fo1_lang_french"
+description = "French translation of Fallout et Tu."
+
+[[mod]]
+dat = "fo1_lang_czech"
+description = "Czech translation of Fallout et Tu."

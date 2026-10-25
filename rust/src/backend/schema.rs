@@ -250,6 +250,7 @@ pub(crate) const CATALOG_TOML: &str = include_str!("../../../schemas/catalog.tom
 /// Reference schemas for popular mods, shipped inside this binary so they work even before
 /// the mod itself (and any `mods/<name>.schema.toml` it carries) is installed.
 const BUILTIN_MOD_SCHEMAS: &[(&str, &str)] = &[
+    ("mods/ettu-bundled.toml", include_str!("../../../schemas/mods/ettu-bundled.toml")),
     ("mods/fo2tweaks.toml", include_str!("../../../schemas/mods/fo2tweaks.toml")),
     ("mods/npc-armor.toml", include_str!("../../../schemas/mods/npc-armor.toml")),
     ("mods/party-orders.toml", include_str!("../../../schemas/mods/party-orders.toml")),
@@ -1424,6 +1425,12 @@ mod tests {
         let paths = Paths::new(tmp.path().to_path_buf());
         let cat = load_catalog(&paths);
         assert!(cat.errors.is_empty(), "unexpected errors in builtin schemas: {:?}", cat.errors);
+        // mods/ettu-bundled.toml has no [files]/[[group]] of its own, so it should contribute
+        // mod_info only (no settings page) - see schemas/mods/ettu-bundled.toml's doc comment.
+        assert_eq!(
+            cat.mod_info.get("fo1_robodog"),
+            Some(&"Turns Dogmeat into a Robodog, with slightly different combat options.".to_string())
+        );
         let display = cat.pages.iter().find(|p| p.name == "Display").expect("Display page");
         let resolution = display
             .groups
