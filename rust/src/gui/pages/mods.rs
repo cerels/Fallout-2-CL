@@ -45,7 +45,7 @@ impl ModsPage {
         paths: &SharedPaths,
         mod_catalog: &[CatalogEntry],
         mod_info: &HashMap<String, String>,
-        is_ce: bool,
+        campaign_id: &str,
     ) -> Self {
         let mut page = ModsPage {
             rows: Vec::new(),
@@ -57,21 +57,23 @@ impl ModsPage {
             busy: HashSet::new(),
             checked_for_updates: false,
         };
-        page.rebuild(paths, mod_catalog, mod_info, is_ce);
+        page.rebuild(paths, mod_catalog, mod_info, campaign_id);
         page
     }
 
-    /// `is_ce` hides the catalog's "not installed yet, download it" suggestions outside the
-    /// Vanilla/CE campaign - `schemas/catalog.toml`'s own header scopes every entry to "regular
-    /// mods fallout2-ce's own README lists", so they're not guaranteed to even apply to Et
-    /// Tu/Sonora/Nevada. Anything already installed still shows regardless of campaign - this
-    /// only hides unsolicited download offers, never an existing row.
+    /// `campaign_id` hides the catalog's "not installed yet, download it" suggestions for any
+    /// campaign a given entry's own `campaigns` list (see `schemas/catalog.toml`) doesn't name -
+    /// most entries are CE-only, since that file's scope is "regular mods fallout2-ce's own
+    /// README lists" and most aren't guaranteed to apply to a total-conversion campaign. A few
+    /// (Party Orders, FO2Tweaks) are explicitly called out there as working on Et Tu too, so
+    /// they opt into "ettu" as well. Anything already installed still shows regardless of
+    /// campaign - this only hides unsolicited download offers, never an existing row.
     pub fn rebuild(
         &mut self,
         paths: &SharedPaths,
         mod_catalog: &[CatalogEntry],
         mod_info: &HashMap<String, String>,
-        is_ce: bool,
+        campaign_id: &str,
     ) {
         self.rows.clear();
         let mut seen = HashSet::new();
@@ -123,7 +125,7 @@ impl ModsPage {
         }
 
         for entry in mod_catalog {
-            if !is_ce || entry.is_installed(paths) {
+            if !entry.offered_for(campaign_id) || entry.is_installed(paths) {
                 continue;
             }
             self.rows.push(ModRow {
@@ -157,9 +159,9 @@ impl ModsPage {
         paths: &SharedPaths,
         mod_catalog: &[CatalogEntry],
         mod_info: &HashMap<String, String>,
-        is_ce: bool,
+        campaign_id: &str,
     ) {
-        self.rebuild(paths, mod_catalog, mod_info, is_ce);
+        self.rebuild(paths, mod_catalog, mod_info, campaign_id);
     }
 
     pub fn save(&mut self, paths: &SharedPaths) -> Result<(), String> {
@@ -278,8 +280,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
                 ui.vertical(|ui| {
                     let title = row.entry.as_ref().map(|e| e.name.clone()).unwrap_or_else(|| row.dat.clone());
-                    ui.label(theme::bold(&title).color(theme::STRONG_TEXT));
+                    let name_label = ui.label(theme::bold(&title).color(theme::STRONG_TEXT));
                     if !row.subtitle.is_empty() {
+                        name_label.on_hover_text(&row.subtitle);
                         ui.label(egui::RichText::new(&row.subtitle).color(theme::MUTED).small());
                     }
                 });
@@ -327,9 +330,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             app.mods.rows.swap(i, j);
         }
         if shown == 0 {
+            let has_catalog_offers = app.mod_catalog.iter().any(|e| e.offered_for(app.campaign.id));
             let hint = if app.mods.hide_missing {
                 "Nothing installed, and \u{201c}Show not installed\u{201d} is off above - turn it on to browse what's available."
-            } else if app.campaign.id == "ce" {
+            } else if has_catalog_offers {
                 "No mods installed or available to download yet."
             } else {
                 "No mods installed for this campaign yet. Drop files in mods/ or use \u{201c}Open mods folder\u{201d} above."

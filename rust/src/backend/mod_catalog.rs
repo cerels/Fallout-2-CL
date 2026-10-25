@@ -20,11 +20,17 @@ pub struct CatalogEntry {
     pub asset: String,
     pub raw: Option<String>,
     pub ini: Option<String>,
+    /// Campaign ids whose Mods page offers this as a download (default: `["ce"]`).
+    pub campaigns: Vec<String>,
 }
 
 impl CatalogEntry {
     pub fn is_installed(&self, paths: &Paths) -> bool {
         self.dat.iter().any(|d| paths.mod_installed(d))
+    }
+
+    pub fn offered_for(&self, campaign_id: &str) -> bool {
+        self.campaigns.iter().any(|c| c == campaign_id)
     }
 }
 
@@ -54,6 +60,11 @@ fn parse_catalog_entry(e: &toml::Value) -> Option<CatalogEntry> {
         asset: e.get("asset").and_then(|v| v.as_str()).unwrap_or("*.zip").to_string(),
         raw: e.get("raw").and_then(|v| v.as_str()).map(str::to_string),
         ini: e.get("ini").and_then(|v| v.as_str()).map(str::to_string),
+        campaigns: e
+            .get("campaigns")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .unwrap_or_else(|| vec!["ce".to_string()]),
     })
 }
 
@@ -305,6 +316,16 @@ mod tests {
         let f2_res = entries.iter().find(|e| e.id == "f2-res").expect("f2-res entry");
         assert!(f2_res.raw.is_some());
         assert_eq!(f2_res.github, None);
+        // Default-scoped entries stay CE-only...
+        assert_eq!(npc_armor.campaigns, vec!["ce".to_string()]);
+        assert!(!npc_armor.offered_for("ettu"));
+        // ...but fallout2-ce's own README names these two as working out of the box on Et
+        // Tu too ("Full Support", Party Orders/FO2Tweaks called out by name), so they opt in.
+        let party_orders = entries.iter().find(|e| e.id == "party-orders").expect("party-orders entry");
+        assert!(party_orders.offered_for("ce"));
+        assert!(party_orders.offered_for("ettu"));
+        let fo2tweaks = entries.iter().find(|e| e.id == "fo2tweaks").expect("fo2tweaks entry");
+        assert!(fo2tweaks.offered_for("ettu"));
     }
 
     #[test]
@@ -347,6 +368,7 @@ mod tests {
             asset: "*.zip".into(),
             raw: None,
             ini: None,
+            campaigns: vec!["ce".into()],
         };
         let err = resolve_download(&entry).unwrap_err();
         assert!(err.contains("neither github nor raw"));
@@ -364,6 +386,7 @@ mod tests {
             asset: "*.zip".into(),
             raw: Some("https://example.com/f2_res.dat".into()),
             ini: None,
+            campaigns: vec!["ce".into()],
         };
         let resolved = resolve_download(&entry).unwrap();
         assert_eq!(resolved.url, "https://example.com/f2_res.dat");

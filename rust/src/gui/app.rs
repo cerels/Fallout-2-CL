@@ -155,7 +155,7 @@ impl App {
         let store = Store::new(&paths, catalog);
         let nav = build_nav(&store.catalog, campaign);
         let play = PlayPage::new(&paths);
-        let mods = ModsPage::new(&paths, &mod_catalog, &store.catalog.mod_info, campaign.id == "ce");
+        let mods = ModsPage::new(&paths, &mod_catalog, &store.catalog.mod_info, campaign.id);
 
         App {
             paths,
@@ -203,7 +203,7 @@ impl App {
         self.mod_catalog = load_mod_catalog();
         self.store = Store::new(&self.paths, catalog);
         self.play = PlayPage::new(&self.paths);
-        self.mods = ModsPage::new(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info, self.campaign.id == "ce");
+        self.mods = ModsPage::new(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info, self.campaign.id);
         self.nav = build_nav(&self.store.catalog, self.campaign);
         self.current = current_key.and_then(|k| self.nav.iter().position(|n| n.key() == k)).unwrap_or(0);
     }
@@ -342,7 +342,7 @@ impl App {
         match action {
             ConfirmAction::Discard => {
                 self.store.revert();
-                self.mods.revert(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info, self.campaign.id == "ce");
+                self.mods.revert(&self.paths, &self.mod_catalog, &self.store.catalog.mod_info, self.campaign.id);
             }
             ConfirmAction::SwitchCampaign(campaign) => self.switch_campaign(ctx, campaign),
             ConfirmAction::InstallCeThenPlay => {

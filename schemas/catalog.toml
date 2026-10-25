@@ -13,6 +13,12 @@
 #
 # `dat` lists the file(s) in mods/ that mean this entry is already installed.
 # `ini` is its settings file, if any — removed together with `dat` on Delete.
+#
+# `campaigns` scopes which campaigns' Mods pages offer this entry as a download
+# (default: ["ce"]). fallout2-ce's own README calls out Et Tu as "Full Support",
+# so entries it also names as working out of the box (Party Orders, FO2Tweaks)
+# are scoped to "ettu" too — see the Et Tu additional-content research this was
+# added from.
 
 [[entry]]
 id = "npc-armor"
@@ -31,6 +37,7 @@ homepage = "https://github.com/BGforgeNet/Fallout2_Party_Orders"
 github = "BGforgeNet/Fallout2_Party_Orders"
 dat = ["party_orders.dat"]
 ini = "party_orders.ini"
+campaigns = ["ce", "ettu"]
 
 [[entry]]
 id = "fo2tweaks"
@@ -40,6 +47,7 @@ homepage = "https://github.com/BGforgeNet/FO2tweaks"
 github = "BGforgeNet/FO2tweaks"
 dat = ["fo2tweaks.dat"]
 ini = "fo2tweaks.ini"
+campaigns = ["ce", "ettu"]
 
 [[entry]]
 id = "f2-res"
