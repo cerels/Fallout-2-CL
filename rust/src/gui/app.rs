@@ -129,11 +129,17 @@ pub struct App {
     pub(crate) play: PlayPage,
     pub(crate) mods: ModsPage,
     pub(crate) campaigns_busy: HashMap<&'static str, String>,
+    pub(crate) campaigns_pending_update: HashMap<&'static str, String>,
     pub(crate) fallout1_path: String,
     pub(crate) fallout1_path_error: Option<String>,
     pub(crate) fallout1_autodetect_tried: bool,
     pub(crate) rpu_pending_update: Option<String>,
     pub(crate) rpu_busy: bool,
+    /// A newer launcher release's version, if a startup check (`App::new`) found one -
+    /// `None` means either "already current" or "the check hasn't come back yet". Shown as a
+    /// clickable status-bar readout, never an interrupting dialog
+    /// (`docs/adr/0012-launcher-self-update-notify-only.md`).
+    pub(crate) launcher_update: Option<String>,
     ce_installing: bool,
     pub(crate) needs_reload: bool,
     pub(crate) pending_confirm: Option<PendingConfirm>,
@@ -156,6 +162,11 @@ impl App {
         let play = PlayPage::new(&paths);
         let mods = ModsPage::new(&paths, &mod_catalog, &store.catalog.mod_info, campaign.id);
 
+        let mut jobs = Jobs::new();
+        jobs.spawn("self-update", |_report| {
+            JobOutcome::LauncherUpdateCheck(crate::backend::self_update::check_for_update())
+        });
+
         App {
             paths,
             campaign,
@@ -165,16 +176,18 @@ impl App {
             current: 0,
             search: String::new(),
             capturing_key: None,
-            jobs: Jobs::new(),
+            jobs,
             job_stages: HashMap::new(),
             play,
             mods,
             campaigns_busy: HashMap::new(),
+            campaigns_pending_update: HashMap::new(),
             fallout1_path: String::new(),
             fallout1_path_error: None,
             fallout1_autodetect_tried: false,
             rpu_pending_update: None,
             rpu_busy: false,
+            launcher_update: None,
             ce_installing: false,
             needs_reload: false,
             pending_confirm: None,
@@ -431,8 +444,22 @@ impl App {
                     None => self.info_dialog = Some(("Restoration Project".to_string(), "Already up to date.".to_string())),
                 }
             }
+            JobOutcome::CampaignUpdateCheck(id, version) => {
+                self.campaigns_busy.remove(id);
+                self.job_stages.remove(id);
+                match version {
+                    Some(v) => {
+                        self.campaigns_pending_update.insert(id, v);
+                    }
+                    None => {
+                        let name = by_id(id).map(|c| c.name).unwrap_or(id);
+                        self.info_dialog = Some((name.to_string(), "Already up to date.".to_string()));
+                    }
+                }
+            }
             JobOutcome::ModInstall(id, result) => self.handle_mod_install(id, result),
             JobOutcome::ModUpdateCheck(id, version) => self.handle_mod_update_check(id, version),
+            JobOutcome::LauncherUpdateCheck(version) => self.launcher_update = version,
         }
     }
 }
@@ -492,7 +519,14 @@ impl App {
                         ui.label(theme::mono("ALL SAVED").color(theme::MUTED));
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(theme::mono(format!("BUILD {}", env!("CARGO_PKG_VERSION"))).color(theme::MUTED));
+                        if let Some(version) = &self.launcher_update {
+                            let text = theme::mono_bold(format!("\u{2191} UPDATE AVAILABLE ({version})")).color(theme::AMBER);
+                            if ui.button(text).on_hover_text("Open the releases page").clicked() {
+                                super::open::open(crate::backend::self_update::RELEASES_URL);
+                            }
+                        } else {
+                            ui.label(theme::mono(format!("BUILD {}", env!("CARGO_PKG_VERSION"))).color(theme::MUTED));
+                        }
                     });
                 });
             });

@@ -44,6 +44,16 @@ fn install_fn(id: &'static str) -> fn(&crate::backend::paths::Paths, &dyn Fn(&st
     }
 }
 
+fn check_for_update_fn(id: &'static str) -> fn(&crate::backend::paths::Paths) -> Option<String> {
+    match id {
+        "ce" => ce_install::check_for_update,
+        "ettu" => ettu_install::check_for_update,
+        "sonora" => sonora_install::check_for_update,
+        "nevada" => nevada_install::check_for_update,
+        _ => unreachable!("every registered campaign id has an installer"),
+    }
+}
+
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
     ui.label(theme::bold("Campaigns").size(17.0).color(theme::STRONG_TEXT));
     ui.label(
@@ -95,6 +105,19 @@ fn campaign_card(app: &mut App, ui: &mut egui::Ui, campaign: &'static Campaign) 
                     if is_installed && !is_active && ui.button("Switch to this campaign").clicked() {
                         let ctx = ui.ctx().clone();
                         app.request_switch_campaign(&ctx, campaign);
+                    }
+                    if is_installed {
+                        if busy.is_some() {
+                            crate::gui::widgets::busy_status(ui, app.job_stages.get(campaign.id).map(String::as_str));
+                        } else {
+                            let action_text = match app.campaigns_pending_update.get(campaign.id) {
+                                Some(v) => format!("Update ({v})"),
+                                None => "Check for updates".to_string(),
+                            };
+                            if ui.button(action_text).clicked() {
+                                start_check_or_update(app, campaign);
+                            }
+                        }
                     }
                 });
 
@@ -205,6 +228,23 @@ fn start_install(app: &mut App, campaign: &'static Campaign) {
             crate::backend::shared_settings::seed_new_campaign(&paths, &target);
         });
         JobOutcome::CampaignInstall(target.id, result)
+    });
+}
+
+/// Either re-runs the installer (if a check already found a newer release pending) or kicks
+/// off that check - same two-step shape as `pages::rpu::on_action`, which this mirrors so a
+/// "Check for updates" click never silently reinstalls something the user didn't ask for.
+fn start_check_or_update(app: &mut App, campaign: &'static Campaign) {
+    if app.campaigns_pending_update.remove(campaign.id).is_some() {
+        start_install(app, campaign);
+        return;
+    }
+    app.campaigns_busy.insert(campaign.id, "Checking\u{2026}".to_string());
+    let target = *campaign;
+    let check = check_for_update_fn(campaign.id);
+    app.jobs.spawn(campaign.id, move |_report| {
+        let paths = crate::gui::jobs::fresh_paths(target);
+        JobOutcome::CampaignUpdateCheck(target.id, check(&paths))
     });
 }
 

@@ -30,11 +30,13 @@ pub(crate) fn fresh_paths(campaign: Campaign) -> SharedPaths {
 pub enum JobOutcome {
     CeInstall(Result<(), String>),
     CampaignInstall(&'static str, Result<(), String>),
+    CampaignUpdateCheck(&'static str, Option<String>),
     Fallout1Extract(Result<(), String>),
     RpuInstall(Result<(), String>),
     RpuUpdateCheck(Option<String>),
     ModInstall(String, Result<(), String>),
     ModUpdateCheck(String, Option<String>),
+    LauncherUpdateCheck(Option<String>),
 }
 
 pub struct Jobs {

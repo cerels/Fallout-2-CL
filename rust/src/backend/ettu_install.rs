@@ -90,6 +90,23 @@ fn resolve_ettu_download() -> Result<(String, String, String), String> {
     pick_ettu_asset(&body)
 }
 
+/// Latest release's tag if it differs from the one we last installed, else `None`. The first
+/// time this is checked, the current tag becomes the baseline (nothing to compare against
+/// yet), so no update is reported that round - same shape as `mod_catalog::check_for_update`.
+pub fn check_for_update(paths: &Paths) -> Option<String> {
+    let (_, _, version) = resolve_ettu_download().ok()?;
+    let mut state = load_ettu_state(paths);
+    match state.get("version").and_then(|v| v.as_str()) {
+        None => {
+            state.insert("version".to_string(), serde_json::Value::String(version));
+            let _ = save_ettu_state(paths, &state);
+            None
+        }
+        Some(baseline) if baseline != version => Some(version),
+        _ => None,
+    }
+}
+
 /// The zip's top-level folder names (every entry's first path component). Split out from
 /// `install_ettu` so the "has the release layout changed?" sanity check is testable against
 /// a synthetic archive.

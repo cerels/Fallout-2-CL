@@ -103,6 +103,22 @@ fn should_skip(parts: &[String]) -> bool {
 /// Validate the release's single top-level folder, then copy everything under it (minus
 /// `should_skip` matches) into `root`. Split out from `install_sonora` so it's testable
 /// against a synthetic archive with no network access needed.
+/// Latest release's tag if it differs from the one we last installed, else `None`. Same
+/// baseline-on-first-check shape as `mod_catalog::check_for_update`.
+pub fn check_for_update(paths: &Paths) -> Option<String> {
+    let (_, _, version) = resolve_sonora_download().ok()?;
+    let mut state = load_sonora_state(paths);
+    match state.get("version") {
+        None => {
+            state.insert("version".to_string(), version);
+            let _ = save_sonora_state(paths, &state);
+            None
+        }
+        Some(baseline) if *baseline != version => Some(version),
+        _ => None,
+    }
+}
+
 fn extract_sonora_release(archive_bytes: &[u8], paths: &Paths, root: &Path) -> Result<(), String> {
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(archive_bytes)).map_err(|e| e.to_string())?;
 

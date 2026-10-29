@@ -122,6 +122,25 @@ fn resolve_ce_download() -> Result<(String, String, String), String> {
     pick_ce_asset(&body, asset.file_name)
 }
 
+/// Latest build's `published_at` if it differs from the one we last installed, else `None`.
+/// The fork ships one continuously-overwritten prerelease rather than discrete versions (see
+/// this module's doc comment), so "newer" here means "a different publish timestamp", not a
+/// different release tag - same baseline-on-first-check shape as every other campaign's
+/// `check_for_update`, just keyed off `published_at` instead of a version string.
+pub fn check_for_update(paths: &Paths) -> Option<String> {
+    let (_, _, published_at) = resolve_ce_download().ok()?;
+    let mut state = load_ce_state(paths);
+    match state.get("published_at") {
+        None => {
+            state.insert("published_at".to_string(), published_at);
+            let _ = save_ce_state(paths, &state);
+            None
+        }
+        Some(baseline) if *baseline != published_at => Some(published_at),
+        _ => None,
+    }
+}
+
 /// Pull `wanted` top-level files (e.g. `{"ce.dat", "fallout2-ce.exe"}`) out of a release
 /// archive that wraps everything in one directory, regardless of tar vs. zip. Split out from
 /// `install_ce` so it's testable against synthetic in-memory archives.

@@ -77,6 +77,22 @@ fn resolve_nevada_download() -> Result<(String, String, String), String> {
     pick_nevada_asset(&body)
 }
 
+/// Latest release's tag if it differs from the one we last installed, else `None`. Same
+/// baseline-on-first-check shape as `mod_catalog::check_for_update`.
+pub fn check_for_update(paths: &Paths) -> Option<String> {
+    let (_, _, version) = resolve_nevada_download().ok()?;
+    let mut state = load_nevada_state(paths);
+    match state.get("version") {
+        None => {
+            state.insert("version".to_string(), version);
+            let _ = save_nevada_state(paths, &state);
+            None
+        }
+        Some(baseline) if *baseline != version => Some(version),
+        _ => None,
+    }
+}
+
 /// Validate the release's single top-level folder, then copy everything under it (minus
 /// `SKIP_NAMES` matches) into `root`. Split out from `install_nevada` so it's testable
 /// against a synthetic archive with no network access needed.
