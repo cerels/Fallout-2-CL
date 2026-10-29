@@ -1,5 +1,11 @@
 # Shared settings sync on save, not a single shared file
 
+> The Sonora-specific claims below (its `fission.cfg`/FISSION format, and its exclusion
+> from sync) are out of date as of `docs/adr/0011-sonora-onto-fallout2-ce.md` — Sonora now
+> uses `fallout2.cfg` like every other campaign and participates in sync like the rest.
+> The core decision this ADR records (sync-on-save over one physical shared file) still
+> holds: campaigns keep separate physical config files regardless of format.
+
 A handful of settings (resolution, volume, key bindings) are really one player
 preference, not five independent ones — but each campaign root keeps its own config file
 in its own format (`fallout2.cfg`, `nevada.cfg`, `fission.cfg`, ...), so there's no single

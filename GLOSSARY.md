@@ -35,7 +35,7 @@ A core engine setting (resolution, display mode, pixel scale, mouse lock, and th
 _Avoid_: Regular mod (mod-provided settings, including any key bindings a mod defines, are never shared, even when the same mod happens to be installed in more than one campaign — this term is for core engine settings only).
 
 **Shareable campaign**:
-A campaign whose config uses the same file format as Vanilla/CE, so shared settings can sync into it: Vanilla/CE, Et Tu, Nevada. Sonora's FISSION fork uses an unrelated config format and has no equivalent keys, so it never participates — not a bug to fix, just a format it doesn't share.
+A campaign whose config uses the same file format as Vanilla/CE, so shared settings can sync into it. Now true of every campaign — Vanilla/CE, Et Tu, Sonora, Nevada — since all four run on fallout2-ce and its `fallout2.cfg` format (see `docs/adr/0011-sonora-onto-fallout2-ce.md`). Kept as its own concept rather than inlined as "every campaign," since a future campaign that genuinely uses a different engine/config format could reintroduce an exception.
 
 **Badge**:
 The short bracket-text code (`F2`, `ET`, `SO`, `NV`) identifying a campaign everywhere in the terminal chrome — the sidebar switcher, the nav menu entries. Stays bracket-text by deliberate choice (see `docs/adr/0008-terminal-skin-escalation.md`).
