@@ -1,35 +1,44 @@
 //! Installing Fallout: Sonora: a full standalone game (its own master.dat/critter.dat),
-//! into its own `Sonora/` campaign root - see `GLOSSARY.md` / `docs/adr/0001`.
+//! into its own `Sonora/` campaign root - see `GLOSSARY.md` / `docs/adr/0001` and
+//! `docs/adr/0011-sonora-onto-fallout2-ce.md`.
 //!
-//! The official English release (cambragol/Fallout-Sonora-English) ships the complete game
-//! plus a default Windows engine binary and Sonora's own fission.dat, and bundles every
-//! platform's engine build again as nested zips inside itself. Extracting those nested zips
-//! was more trouble than it's worth (a zip inside a zip means parsing a second central
-//! directory out of a byte range of the first), and there's a cleaner source anyway: the
-//! engine's own project, cambragol/fission-ce, publishes the same per-platform builds as
-//! plain top-level release assets. `install_sonora` uses that instead for the binary - but
-//! never for fission.dat: fission-ce's own fission.dat is a different size than the one
-//! bundled in the Sonora release, so it's Sonora-specific and must come from the Sonora zip,
-//! not the generic engine release.
+//! Sonora's own official release (cambragol/Fallout-Sonora-English) bundles a standalone
+//! engine of its own (FISSION, a hard fork of the long-unmaintained original
+//! alexbatalov/fallout2-ce, not the actively-maintained fallout2-ce/fallout2-ce this
+//! launcher otherwise standardizes on for every other campaign). `install_sonora` instead
+//! uses NovaRain/Fallout-Sonora-English's `eng_repack` branch - a repack of the same
+//! Sonora release, kept in sync with cambragol's own version numbering, built for classic
+//! `Fallout2.exe`+sfall instead - and swaps its classic Windows-only engine for a native
+//! `fallout2-ce` build the same way as every other campaign, via `ce_install::install_ce`.
 
-use std::collections::{BTreeMap, HashSet};
-use std::io::{self, Read};
+use std::collections::BTreeMap;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::campaigns::{by_id, Campaign};
 use super::paths::Paths;
 
-const SONORA_REPO: &str = "cambragol/Fallout-Sonora-English";
-const FISSION_REPO: &str = "cambragol/fission-ce";
+const SONORA_REPO: &str = "NovaRain/Fallout-Sonora-English";
 const CAMPAIGN_ID: &str = "sonora";
 
-/// Inside the main release zip: things that aren't part of the playable game, or that we're
-/// replacing with a native binary fetched from `FISSION_REPO` instead.
+/// Inside the release zip: dev-only tooling, never part of the playable game.
 const SKIP_TOP_DIRS: &[&str] = &["__MACOSX", "BIS_mapper"];
-/// `fallout-sonora-x64.exe` is the bundled default Windows binary - always superseded by
-/// `fetch_fission_binary`, on every platform, so there's no point keeping it around.
-const SKIP_NAMES: &[&str] = &["fsonoradlc.exe", "log_develop.txt", "fallout-sonora-x64.exe"];
+/// The classic Windows-only engine, its sfall injection, and the classic-engine-only
+/// high-res patch bundled alongside it - all superseded by fetching a native fallout2-ce
+/// build instead, on every platform.
+const SKIP_NAMES: &[&str] = &[
+    "fallout2.exe",
+    "ddraw.dll",
+    "ddraw.ini",
+    "f2_res.dat",
+    "f2_res.dll",
+    "f2_res.ini",
+    "f2_res_config.exe",
+    "f2_res_change.log",
+    "f2_res_readme.rtf",
+    "log_develop.txt",
+];
 
 fn campaign() -> &'static Campaign {
     by_id(CAMPAIGN_ID).expect("\"sonora\" is a registered campaign id")
@@ -59,66 +68,28 @@ pub fn is_installed(paths: &Paths) -> bool {
     campaign().is_installed(paths)
 }
 
-/// Pick the first `*.zip` asset (skipping the macOS `.dmg` also published there) and the
-/// release tag out of a "latest release" API response.
+/// Pick the main English repack zip out of a "latest release" API response - skipping the
+/// optional `fs_lang_*.zip` language packs published alongside it (Russian, Spanish: not
+/// part of this install, see `docs/adr/0011-sonora-onto-fallout2-ce.md`'s scope note).
 fn pick_sonora_asset(body: &serde_json::Value) -> Result<(String, String, String), String> {
     let version = body.get("tag_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let assets = body.get("assets").and_then(|v| v.as_array()).cloned().unwrap_or_default();
     for a in &assets {
         let name = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        if name.to_lowercase().ends_with(".zip") {
+        let lower = name.to_lowercase();
+        if lower.starts_with("fallout_sonora") && lower.ends_with(".zip") {
             let url = a.get("browser_download_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
             return Ok((url, name.to_string(), version));
         }
     }
-    Err("No Sonora release zip found.".to_string())
+    Err("No main Fallout_Sonora*.zip asset found in the latest release.".to_string())
 }
 
-/// Return (url, filename, version) for Sonora's latest English release zip.
+/// Return (url, filename, version) for Sonora's latest English repack release zip.
 fn resolve_sonora_download() -> Result<(String, String, String), String> {
     let api_url = format!("https://api.github.com/repos/{SONORA_REPO}/releases/latest");
     let body = super::http::get_json(&api_url, Duration::from_secs(20))?;
     pick_sonora_asset(&body)
-}
-
-struct FissionAsset {
-    archive_name: &'static str,
-    bin_name: &'static str,
-}
-
-/// (archive filename, binary filename inside it) from `FISSION_REPO`'s latest release, for
-/// this OS/CPU - same idea as `ce_install::asset_for_platform`.
-fn fission_asset_for_platform() -> Result<FissionAsset, String> {
-    use std::env::consts::{ARCH, OS};
-    let asset = match (OS, ARCH) {
-        ("linux", "x86_64") => FissionAsset {
-            archive_name: "fallout-fission-linux-x64.zip",
-            bin_name: "fallout-fission-linux-x64",
-        },
-        ("linux", "aarch64") => FissionAsset {
-            archive_name: "fallout-fission-linux-arm64.zip",
-            bin_name: "fallout-fission-linux-arm64",
-        },
-        ("linux", "arm") => FissionAsset {
-            archive_name: "fallout-fission-linux-armhf.zip",
-            bin_name: "fallout-fission-linux-armhf",
-        },
-        ("windows", "x86_64") => FissionAsset {
-            archive_name: "fallout-fission-windows-x64.zip",
-            bin_name: "fallout-fission-x64.exe",
-        },
-        ("windows", "x86") => FissionAsset {
-            archive_name: "fallout-fission-windows-x86.zip",
-            bin_name: "fallout-fission-x86.exe",
-        },
-        (os, arch) => {
-            return Err(format!(
-                "No native Sonora/FISSION engine build for this platform/CPU ({os}/{arch}) - install \
-                 fails, since the release's own bundled engine binary is Windows-only."
-            ))
-        }
-    };
-    Ok(asset)
 }
 
 fn should_skip(parts: &[String]) -> bool {
@@ -126,70 +97,16 @@ fn should_skip(parts: &[String]) -> bool {
         return true;
     }
     let lower = parts.last().unwrap().to_lowercase();
-    if SKIP_NAMES.contains(&lower.as_str()) || lower.ends_with(".ds_store") {
-        return true;
-    }
-    // The nested per-platform engine zips (fallout-sonora-linux-x64.zip, ...android.zip,
-    // ...ipa.zip) - superseded by fetching a native build from FISSION_REPO instead.
-    if parts.len() == 1 && lower.starts_with("fallout-sonora") && lower.ends_with(".zip") {
-        return true;
-    }
-    false
+    SKIP_NAMES.contains(&lower.as_str()) || lower.ends_with(".ds_store")
 }
 
-fn find_fission_asset_url(body: &serde_json::Value, asset_name: &str) -> Result<String, String> {
-    let assets = body.get("assets").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-    assets
-        .iter()
-        .find(|a| a.get("name").and_then(|v| v.as_str()) == Some(asset_name))
-        .and_then(|a| a.get("browser_download_url").and_then(|v| v.as_str()).map(str::to_string))
-        .ok_or_else(|| format!("No {asset_name} asset found in the latest FISSION release."))
-}
-
-/// `FISSION_REPO` only ever publishes beta/prerelease tags (never a plain "latest" release),
-/// so `/releases/latest` - which GitHub's API explicitly excludes prereleases from - 404s
-/// every time. `/releases` (the list endpoint) includes prereleases and is already sorted
-/// newest-published-first, so its first entry is the one we want. Split out from
-/// `fetch_fission_binary` so it's testable against a canned JSON response, with no network
-/// access needed.
-fn resolve_latest_fission_release(body: &serde_json::Value) -> Result<&serde_json::Value, String> {
-    body.as_array()
-        .and_then(|releases| releases.first())
-        .ok_or_else(|| "No FISSION releases found.".to_string())
-}
-
-/// Fetch a native engine binary for this platform from `FISSION_REPO`'s latest (pre)release
-/// and place it in `root`, under the name `campaigns.rs` expects to find.
-fn fetch_fission_binary(root: &Path) -> Result<(), String> {
-    let asset = fission_asset_for_platform()?;
-    let api_url = format!("https://api.github.com/repos/{FISSION_REPO}/releases");
-    let body = super::http::get_json(&api_url, Duration::from_secs(20))?;
-    let release = resolve_latest_fission_release(&body)?;
-    let asset_url = find_fission_asset_url(release, asset.archive_name)?;
-    let bytes = super::http::get_bytes(&asset_url, Duration::from_secs(120))?;
-    write_fission_binary(&bytes, asset.bin_name, root)
-}
-
-/// The zip-reading and chmod part of `fetch_fission_binary`, split out so it's testable
+/// Validate the release's single top-level folder, then copy everything under it (minus
+/// `should_skip` matches) into `root`. Split out from `install_sonora` so it's testable
 /// against a synthetic archive with no network access needed.
-fn write_fission_binary(archive_bytes: &[u8], bin_name: &str, root: &Path) -> Result<(), String> {
-    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(archive_bytes)).map_err(|e| e.to_string())?;
-    let mut binary = Vec::new();
-    zip.by_name(bin_name).map_err(|e| e.to_string())?.read_to_end(&mut binary).map_err(|e| e.to_string())?;
-
-    let out_name = if cfg!(windows) { "fallout-fission.exe" } else { "fallout-fission" };
-    let out_path = root.join(out_name);
-    std::fs::write(&out_path, &binary).map_err(|e| e.to_string())?;
-    super::ce_install::make_executable(&out_path).map_err(|e| e.to_string())
-}
-
-/// The zip-download part of `install_sonora`: validate the release's single top-level
-/// folder, then copy everything under it (minus `should_skip` matches) into `root`. Split
-/// out so it's testable against a synthetic archive with no network access needed.
 fn extract_sonora_release(archive_bytes: &[u8], paths: &Paths, root: &Path) -> Result<(), String> {
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(archive_bytes)).map_err(|e| e.to_string())?;
 
-    let mut top_level = HashSet::new();
+    let mut top_level = std::collections::HashSet::new();
     for i in 0..zip.len() {
         let name = zip.by_index(i).map_err(|e| e.to_string())?.name().to_string();
         if let Some(first) = name.split('/').next() {
@@ -233,8 +150,9 @@ fn extract_sonora_release(archive_bytes: &[u8], paths: &Paths, root: &Path) -> R
     Ok(())
 }
 
-/// Download Sonora's release, extract the game (skipping dev/platform-bundle extras), then
-/// fetch a native engine binary from `FISSION_REPO`.
+/// Download Sonora's release and extract it into its own campaign root (skipping the
+/// classic Windows-only engine bits), then fetch a native fallout2-ce engine binary the
+/// same way as every other campaign.
 pub fn install_sonora(paths: &Paths, on_stage: &dyn Fn(&str)) -> Result<(), String> {
     let root = sonora_root(paths);
     let (url, _filename, version) = resolve_sonora_download()?;
@@ -242,7 +160,12 @@ pub fn install_sonora(paths: &Paths, on_stage: &dyn Fn(&str)) -> Result<(), Stri
     on_stage("Installing\u{2026}");
 
     extract_sonora_release(&bytes, paths, &root)?;
-    fetch_fission_binary(&root)?;
+
+    if cfg!(any(target_os = "linux", target_os = "windows")) {
+        let _guard = paths.override_campaign_root(root.clone());
+        super::ce_install::install_ce(paths, on_stage)?;
+    }
+    // macOS: not automated yet, same as CE's own install.
 
     let mut state = BTreeMap::new();
     state.insert("version".to_string(), version);
@@ -262,18 +185,28 @@ mod tests {
     }
 
     #[test]
-    fn pick_sonora_asset_skips_the_macos_dmg() {
+    fn pick_sonora_asset_skips_the_language_packs() {
         let body = serde_json::json!({
-            "tag_name": "v1.5",
+            "tag_name": "1.16.4-sfall",
             "assets": [
-                {"name": "Fallout-Sonora.dmg", "browser_download_url": "https://x/sonora.dmg"},
-                {"name": "Fallout-Sonora-English.zip", "browser_download_url": "https://x/sonora.zip"},
+                {"name": "fs_lang_russian.zip", "browser_download_url": "https://x/ru.zip"},
+                {"name": "fs_lang_spanish.zip", "browser_download_url": "https://x/es.zip"},
+                {"name": "Fallout_Sonora_1.16.4E_sfall.zip", "browser_download_url": "https://x/sonora.zip"},
             ]
         });
         let (url, name, version) = pick_sonora_asset(&body).unwrap();
         assert_eq!(url, "https://x/sonora.zip");
-        assert_eq!(name, "Fallout-Sonora-English.zip");
-        assert_eq!(version, "v1.5");
+        assert_eq!(name, "Fallout_Sonora_1.16.4E_sfall.zip");
+        assert_eq!(version, "1.16.4-sfall");
+    }
+
+    #[test]
+    fn pick_sonora_asset_errors_when_missing() {
+        let body = serde_json::json!({
+            "tag_name": "1.16.4-sfall",
+            "assets": [{"name": "fs_lang_russian.zip", "browser_download_url": "https://x/ru.zip"}]
+        });
+        assert!(pick_sonora_asset(&body).is_err());
     }
 
     #[test]
@@ -283,29 +216,20 @@ mod tests {
     }
 
     #[test]
-    fn should_skip_known_junk_filenames_case_insensitively() {
-        assert!(should_skip(&["data".to_string(), "FSonoraDLC.exe".to_string()]));
+    fn should_skip_the_classic_engine_and_classic_hires_patch() {
+        assert!(should_skip(&["Fallout2.exe".to_string()]));
+        assert!(should_skip(&["ddraw.dll".to_string()]));
+        assert!(should_skip(&["DDRAW.INI".to_string()]));
+        assert!(should_skip(&["f2_res.dat".to_string()]));
+        assert!(should_skip(&["f2_res_Config.exe".to_string()]));
         assert!(should_skip(&["x".to_string(), "thumbs.DS_Store".to_string()]));
-    }
-
-    #[test]
-    fn should_skip_nested_platform_engine_zips() {
-        assert!(should_skip(&["fallout-sonora-android.zip".to_string()]));
-        assert!(should_skip(&["FALLOUT-SONORA-LINUX-X64.ZIP".to_string()]));
     }
 
     #[test]
     fn should_skip_keeps_ordinary_game_files() {
         assert!(!should_skip(&["data".to_string(), "master.dat".to_string()]));
-        assert!(!should_skip(&["fission.dat".to_string()]));
-    }
-
-    #[test]
-    fn should_skip_nested_platform_zip_lookalike_is_not_skipped() {
-        // The "nested platform engine zip" rule only fires at the top level (`parts.len()
-        // == 1`); a same-named file sitting in a subfolder is an ordinary game file as far
-        // as this check is concerned.
-        assert!(!should_skip(&["mods".to_string(), "fallout-sonora-extra.zip".to_string()]));
+        assert!(!should_skip(&["fallout2.cfg".to_string()]));
+        assert!(!should_skip(&["sfall.dat".to_string()]));
     }
 
     fn build_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
@@ -321,13 +245,16 @@ mod tests {
     }
 
     #[test]
-    fn extract_sonora_release_copies_the_game_and_skips_extras() {
+    fn extract_sonora_release_copies_the_game_and_skips_the_classic_engine() {
         let zip = build_zip(&[
-            ("Fallout-Sonora/data/master.dat", b"master"),
-            ("Fallout-Sonora/fission.dat", b"fission"),
-            ("Fallout-Sonora/fallout-sonora-x64.exe", b"windows binary, superseded"),
+            ("Fallout_Sonora_1_16_E/data/master.dat", b"master"),
+            ("Fallout_Sonora_1_16_E/fallout2.cfg", b"[system]\n"),
+            ("Fallout_Sonora_1_16_E/sfall.dat", b"sfall"),
+            ("Fallout_Sonora_1_16_E/Fallout2.exe", b"classic engine, superseded"),
+            ("Fallout_Sonora_1_16_E/ddraw.dll", b"sfall injection, superseded"),
+            ("Fallout_Sonora_1_16_E/f2_res.dat", b"classic hires patch, superseded"),
             ("__MACOSX/._data", b"mac junk"),
-            ("Fallout-Sonora/fallout-sonora-android.zip", b"nested bundle, superseded"),
+            ("Fallout_Sonora_1_16_E/BIS_mapper/readme.txt", b"dev tool"),
         ]);
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());
@@ -337,9 +264,12 @@ mod tests {
         extract_sonora_release(&zip, &paths, &root).unwrap();
 
         assert_eq!(std::fs::read(root.join("data").join("master.dat")).unwrap(), b"master");
-        assert_eq!(std::fs::read(root.join("fission.dat")).unwrap(), b"fission");
-        assert!(!root.join("fallout-sonora-x64.exe").exists());
-        assert!(!root.join("fallout-sonora-android.zip").exists());
+        assert!(root.join("fallout2.cfg").is_file());
+        assert!(root.join("sfall.dat").is_file());
+        assert!(!root.join("Fallout2.exe").exists());
+        assert!(!root.join("ddraw.dll").exists());
+        assert!(!root.join("f2_res.dat").exists());
+        assert!(!root.join("BIS_mapper").exists());
     }
 
     #[test]
@@ -365,12 +295,9 @@ mod tests {
 
     #[test]
     fn extract_sonora_release_errors_when_every_file_is_skipped() {
-        // One valid top-level folder, but every file inside it matches a skip rule - there's
-        // nothing left to copy, which should be its own clear error rather than silently
-        // "succeeding" with an empty install.
         let zip = build_zip(&[
-            ("Fallout-Sonora/fallout-sonora-x64.exe", b"windows binary, superseded"),
-            ("Fallout-Sonora/log_develop.txt", b"dev log"),
+            ("Fallout_Sonora_1_16_E/Fallout2.exe", b"classic engine, superseded"),
+            ("Fallout_Sonora_1_16_E/log_develop.txt", b"dev log"),
         ]);
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());
@@ -381,70 +308,13 @@ mod tests {
     }
 
     #[test]
-    fn resolve_latest_fission_release_picks_the_first_entry_even_though_its_a_prerelease() {
-        // FISSION_REPO only ever ships beta tags - this must work from the /releases list
-        // (which includes prereleases), not assume a "latest" (non-prerelease) release
-        // exists at all.
-        let body = serde_json::json!([
-            {"tag_name": "beta-0.9.7.10", "prerelease": true, "assets": []},
-            {"tag_name": "beta-0.9.7.9", "prerelease": true, "assets": []},
-        ]);
-        let release = resolve_latest_fission_release(&body).unwrap();
-        assert_eq!(release.get("tag_name").and_then(|v| v.as_str()), Some("beta-0.9.7.10"));
-    }
-
-    #[test]
-    fn resolve_latest_fission_release_errors_cleanly_on_an_empty_list() {
-        let body = serde_json::json!([]);
-        assert!(resolve_latest_fission_release(&body).is_err());
-    }
-
-    #[test]
-    fn find_fission_asset_url_matches_by_exact_name() {
-        let body = serde_json::json!({
-            "assets": [{"name": "fallout-fission-linux-x64.zip", "browser_download_url": "https://x/f.zip"}]
-        });
-        assert_eq!(find_fission_asset_url(&body, "fallout-fission-linux-x64.zip").unwrap(), "https://x/f.zip");
-        assert!(find_fission_asset_url(&body, "fallout-fission-linux-arm64.zip").is_err());
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn write_fission_binary_extracts_and_marks_executable() {
-        let zip = build_zip(&[("fallout-fission-linux-x64", b"elf bytes")]);
-        let tmp = tempfile::tempdir().unwrap();
-        write_fission_binary(&zip, "fallout-fission-linux-x64", tmp.path()).unwrap();
-
-        let out = tmp.path().join("fallout-fission");
-        assert_eq!(std::fs::read(&out).unwrap(), b"elf bytes");
-        use std::os::unix::fs::PermissionsExt;
-        assert_ne!(std::fs::metadata(&out).unwrap().permissions().mode() & 0o111, 0);
-    }
-
-    #[test]
-    fn write_fission_binary_errors_cleanly_when_the_named_binary_is_absent() {
-        let zip = build_zip(&[("some-other-file", b"x")]);
-        let tmp = tempfile::tempdir().unwrap();
-        assert!(write_fission_binary(&zip, "fallout-fission-linux-x64", tmp.path()).is_err());
-    }
-
-    #[test]
-    fn fission_asset_for_platform_errors_clearly_on_an_unsupported_cpu() {
-        // FissionAsset isn't Debug/PartialEq (no production changes just for a test), so
-        // match explicitly instead of unwrap_err().
-        if let Err(e) = fission_asset_for_platform() {
-            assert!(e.contains("No native Sonora/FISSION engine build"));
-        }
-    }
-
-    #[test]
     fn state_round_trips() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());
         std::fs::create_dir_all(sonora_root(&paths)).unwrap();
 
         let mut state = BTreeMap::new();
-        state.insert("version".to_string(), "v1.5".to_string());
+        state.insert("version".to_string(), "1.16.4-sfall".to_string());
         save_sonora_state(&paths, &state).unwrap();
         assert_eq!(load_sonora_state(&paths), state);
     }
