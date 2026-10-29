@@ -33,7 +33,12 @@ real labeled controls instead of raw config text, manage your mods and saves, an
 - One launcher, every campaign. CE, Et Tu, Sonora and Nevada each get their own settings, mods and
   saves, kept fully independent. Switch between them with one click on the sidebar badge, and the
   launcher remembers the last one you played. (Olympus 2207 isn't supported yet; see
-  [docs/adr/0002-olympus-not-supported.md](docs/adr/0002-olympus-not-supported.md).)
+  [docs/adr/0002-olympus-not-supported.md](docs/adr/0002-olympus-not-supported.md).) Once
+  installed, each campaign (and CE itself) gets a "Check for updates" button on the Campaigns page.
+- Tells you when it's out of date, too. The status bar swaps its build readout for a clickable
+  "UPDATE AVAILABLE" the moment a newer launcher release exists - it opens the releases page, never
+  downloads or replaces itself automatically (see
+  [docs/adr/0012-launcher-self-update-notify-only.md](docs/adr/0012-launcher-self-update-notify-only.md)).
 - Every setting, as an actual control. Switches, dropdowns, sliders, key capture, resolution
   pickers: anything that used to mean editing a config file by hand. Changed-from-default values
   are marked, search finds a setting by name, and one click resets it. The Restoration Project
