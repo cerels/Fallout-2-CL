@@ -34,8 +34,9 @@ fn write_value(f: &mut IniFile, s: &Setting, value: &str) {
 }
 
 /// Seeds `new_campaign`'s own config from whichever already-installed shareable campaign
-/// `campaigns::shared_settings_seed_source` picks - a no-op for a non-shareable campaign
-/// (Sonora) or when no other shareable campaign is installed yet. Best-effort per file, like
+/// `campaigns::shared_settings_seed_source` picks - a no-op when no other shareable
+/// campaign is installed yet (every campaign is shareable now, see
+/// `docs/adr/0011-sonora-onto-fallout2-ce.md`). Best-effort per file, like
 /// save-time sync: a file that can't be read or written is logged and skipped rather than
 /// failing the install that already succeeded.
 pub fn seed_new_campaign(paths: &Paths, new_campaign: &Campaign) {
@@ -112,19 +113,21 @@ mod tests {
     }
 
     #[test]
-    fn does_not_seed_a_non_shareable_campaign() {
+    fn seeds_sonora_now_that_it_shares_fallout2_ces_config_format() {
+        // Sonora runs on fallout2-ce (see docs/adr/0011-sonora-onto-fallout2-ce.md) and is
+        // shareable like every other campaign now - no more special-cased no-op for it.
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("fallout2-ce"), b"").unwrap();
         std::fs::write(tmp.path().join("fallout2.cfg"), "[sound]\nmaster_volume=500\n").unwrap();
         std::fs::create_dir_all(tmp.path().join("Sonora")).unwrap();
-        std::fs::write(tmp.path().join("Sonora").join("fallout-fission"), b"").unwrap();
+        std::fs::write(tmp.path().join("Sonora").join("fallout2-ce"), b"").unwrap();
+        std::fs::write(tmp.path().join("Sonora").join("fallout2.cfg"), "[sound]\nmaster_volume=100\n").unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());
 
-        // Should be a complete no-op: Sonora has no fallout2.cfg at all, and nothing should
-        // be fabricated for it.
         seed_new_campaign(&paths, campaigns::by_id("sonora").unwrap());
 
-        assert!(!tmp.path().join("Sonora").join("fallout2.cfg").exists());
+        let sonora_cfg = std::fs::read_to_string(tmp.path().join("Sonora").join("fallout2.cfg")).unwrap();
+        assert!(sonora_cfg.contains("master_volume=500"), "{sonora_cfg}");
     }
 
     #[test]

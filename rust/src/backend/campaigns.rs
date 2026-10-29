@@ -33,8 +33,9 @@ pub struct Campaign {
     pub cover_uri: &'static str,
     /// Whether this campaign's config uses the same file/section/key format as Vanilla/CE
     /// (see GLOSSARY.md's "Shareable campaign" and `docs/adr/0003-shared-settings-sync-on-save.md`),
-    /// so a `Setting::shared` value can sync straight into it. False only for Sonora, whose
-    /// FISSION fork uses an unrelated config format with no equivalent keys.
+    /// so a `Setting::shared` value can sync straight into it. True for every campaign now
+    /// that Sonora also runs on fallout2-ce's own `fallout2.cfg` format - see
+    /// `docs/adr/0011-sonora-onto-fallout2-ce.md`.
     pub shareable: bool,
 }
 
@@ -80,12 +81,12 @@ pub const CAMPAIGNS: &[Campaign] = &[
         id: "sonora",
         name: "Fallout: Sonora",
         subdir: "Sonora",
-        bin_names: &["fallout-fission", "fallout-fission.exe"],
+        bin_names: &["fallout2-ce", "fallout2-ce.exe"],
         badge: "SO",
         accent: "#ffb84d",
         cover: include_bytes!("../../assets/covers/sonora.png"),
         cover_uri: "bytes://covers/sonora.png",
-        shareable: false,
+        shareable: true,
     },
     Campaign {
         id: "nevada",
@@ -244,22 +245,24 @@ mod tests {
     }
 
     #[test]
-    fn only_sonora_is_not_shareable() {
+    fn every_campaign_is_shareable() {
+        // All four campaigns now run fallout2-ce's own config format - see
+        // docs/adr/0011-sonora-onto-fallout2-ce.md.
         for c in CAMPAIGNS {
-            assert_eq!(c.shareable, c.id != "sonora", "{}", c.id);
+            assert!(c.shareable, "{}", c.id);
         }
     }
 
     #[test]
-    fn installed_shareable_campaigns_excludes_sonora_even_when_installed() {
+    fn installed_shareable_campaigns_includes_sonora_when_installed() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::new(tmp.path().to_path_buf());
         std::fs::write(tmp.path().join("fallout2-ce"), b"").unwrap();
         std::fs::create_dir_all(tmp.path().join("Sonora")).unwrap();
-        std::fs::write(tmp.path().join("Sonora").join("fallout-fission"), b"").unwrap();
+        std::fs::write(tmp.path().join("Sonora").join("fallout2-ce"), b"").unwrap();
 
         let ids: Vec<_> = installed_shareable_campaigns(&paths).iter().map(|c| c.id).collect();
-        assert_eq!(ids, vec!["ce"]);
+        assert_eq!(ids, vec!["ce", "sonora"]);
     }
 
     #[test]
